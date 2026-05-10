@@ -4,7 +4,7 @@
 //   localStorage.setItem('apiBase', 'https://your-app.railway.app')
 // This persists across page reloads.
 
-const API_BASE = localStorage.getItem('apiBase') || 'http://localhost:3000';
+const API_BASE = localStorage.getItem('apiBase') || 'https://schnitzel.onrender.com';
 const WS_URL   = API_BASE.replace(/^http/, 'ws');
 
 // ─── REST ─────────────────────────────────────────────────────────────────────
