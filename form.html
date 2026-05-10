@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הזמנה — דוכן שניצלים</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:       #16a34a;
+      --green-light: #dcfce7;
+      --green-dark:  #14532d;
+      --border:      #e5e7eb;
+      --bg:          #f9fafb;
+      --surface:     #ffffff;
+      --text:        #111827;
+      --muted:       #6b7280;
+      --radius:      12px;
+    }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Arial, sans-serif;
+      direction: rtl;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ─── wrapper ────────────────────────────────────────────────────────── */
+    #app {
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--surface);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── header ─────────────────────────────────────────────────────────── */
+    #form-header {
+      background: var(--green);
+      color: #fff;
+      padding: 24px 20px 20px;
+      text-align: center;
+    }
+    #form-header .stand-emoji { font-size: 2.4rem; display: block; margin-bottom: 6px; }
+    #form-header h1 { font-size: 1.4rem; font-weight: 800; }
+    #form-header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 3px; }
+
+    /* ─── closed state ───────────────────────────────────────────────────── */
+    #closed-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      text-align: center;
+      gap: 12px;
+    }
+    #closed-state .lock { font-size: 3rem; }
+    #closed-state h2 { font-size: 1.3rem; font-weight: 800; }
+    #closed-state p  { color: var(--muted); font-size: 1rem; line-height: 1.6; }
+
+    /* ─── form body ──────────────────────────────────────────────────────── */
+    #order-form { padding: 20px; display: flex; flex-direction: column; gap: 22px; }
+
+    .field-label {
+      display: block;
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 7px;
+      color: var(--text);
+    }
+    .required-star { color: #dc2626; margin-right: 2px; }
+
+    input[type=text], input[type=tel], textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-family: inherit;
+      direction: rtl;
+      background: var(--surface);
+      color: var(--text);
+      -webkit-appearance: none;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--green); }
+
+    /* ─── pickup time ────────────────────────────────────────────────────── */
+    #pickup-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pickup-btn {
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 44px;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color .12s, background .12s, color .12s;
+    }
+    .pickup-btn.selected {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+
+    /* ─── menu grid ──────────────────────────────────────────────────────── */
+    #menu-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .menu-btn {
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 12px 10px;
+      text-align: center;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color .12s, background .12s;
+      min-height: 80px;
+      justify-content: center;
+    }
+    .menu-btn:active { transform: scale(0.97); }
+    .menu-btn.selected { border-color: var(--green); background: var(--green-light); }
+
+    .menu-btn .m-emoji { font-size: 1.4rem; }
+    .menu-btn .m-name  { font-size: 0.82rem; font-weight: 700; line-height: 1.25; }
+    .menu-btn .m-desc  { font-size: 0.72rem; color: var(--muted); }
+    .menu-btn .m-price { font-size: 0.82rem; font-weight: 700; color: var(--green-dark); margin-top: 2px; }
+    .menu-btn.selected .m-price { color: var(--green); }
+
+    .menu-section-label {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+      margin-top: 4px;
+    }
+
+    /* ─── cart (selected items + spreads) ───────────────────────────────── */
+    #cart-section { display: none; }
+    #cart-section.visible { display: block; }
+
+    #cart-items { display: flex; flex-direction: column; gap: 12px; }
+
+    .cart-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .cart-card-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 13px;
+      background: #f9fafb;
+    }
+    .cc-name  { flex: 1; font-size: 0.95rem; font-weight: 700; }
+    .cc-price { font-size: 0.88rem; color: var(--muted); white-space: nowrap; }
+
+    .qty-row  { display: flex; align-items: center; gap: 8px; }
+    .qty-btn  {
+      width: 32px; height: 32px;
+      border: 1.5px solid var(--border);
+      border-radius: 50%;
+      background: var(--surface);
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    .qty-btn.remove { border-color: #fca5a5; color: #dc2626; }
+    .qty-num { min-width: 22px; text-align: center; font-weight: 800; font-size: 1rem; }
+
+    /* spreads section inside the cart card */
+    .spreads-section { padding: 10px 13px; border-top: 1px solid var(--border); }
+    .spreads-title { font-size: 0.75rem; font-weight: 700; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .04em; }
+    .spreads-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+    .spreads-group:last-child { margin-bottom: 0; }
+    .spread-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+
+    .spread-btn {
+      padding: 7px 11px;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color .1s, background .1s, color .1s;
+    }
+    .spread-btn.selected { background: var(--green); border-color: var(--green); color: #fff; }
+
+    /* ─── total + submit ─────────────────────────────────────────────────── */
+    #total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 1.2rem;
+      font-weight: 800;
+      padding: 14px 0;
+      border-top: 2px solid var(--border);
+    }
+    #total-amount { color: var(--green); }
+
+    #submit-btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      letter-spacing: .02em;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+    #submit-btn:not(:disabled):active { opacity: .88; }
+
+    /* ─── confirmation state ─────────────────────────────────────────────── */
+    #confirm-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 24px;
+      text-align: center;
+      gap: 14px;
+    }
+    .confirm-check { font-size: 4rem; }
+    #confirm-state h2 { font-size: 1.5rem; font-weight: 900; color: var(--green); }
+    .confirm-card {
+      background: var(--green-light);
+      border: 1.5px solid #86efac;
+      border-radius: var(--radius);
+      padding: 20px 28px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .confirm-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 1rem;
+      border-bottom: 1px solid #bbf7d0;
+    }
+    .confirm-row:last-child { border-bottom: none; }
+    .confirm-row .label { color: var(--muted); }
+    .confirm-row .value { font-weight: 800; }
+    .confirm-note { font-size: 0.9rem; color: var(--muted); line-height: 1.6; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header (always visible) -->
+  <header id="form-header">
+    <span class="stand-emoji">🥩</span>
+    <h1>דוכן השניצלים</h1>
+    <p>הזמנה מראש — איסוף בדוכן</p>
+  </header>
+
+  <!-- Closed state -->
+  <div id="closed-state" class="hidden">
+    <span class="lock">🔒</span>
+    <h2>הדוכן סגור כרגע</h2>
+    <p>הדוכן פתוח בימי שלישי<br>18:00 – 20:30<br>בקיבוץ</p>
+  </div>
+
+  <!-- Order form -->
+  <form id="order-form" class="hidden" novalidate>
+
+    <div><!-- name -->
+      <label class="field-label" for="f-name">שם <span class="required-star">*</span></label>
+      <input type="text" id="f-name" placeholder="שם מלא" autocomplete="name" autocorrect="off">
+    </div>
+
+    <div><!-- phone -->
+      <label class="field-label" for="f-phone">טלפון <span class="required-star">*</span></label>
+      <input type="tel" id="f-phone" placeholder="05X-XXXXXXX" autocomplete="tel" inputmode="tel">
+    </div>
+
+    <div><!-- pickup time -->
+      <label class="field-label">שעת איסוף <span class="required-star">*</span></label>
+      <div id="pickup-grid"></div>
+    </div>
+
+    <div><!-- menu -->
+      <label class="field-label">בחר מנות <span class="required-star">*</span></label>
+      <div class="menu-section-label">אוכל</div>
+      <div id="food-grid" class="menu-grid"></div>
+      <div class="menu-section-label" style="margin-top:12px">שתייה</div>
+      <div id="drinks-grid" class="menu-grid"></div>
+    </div>
+
+    <!-- Cart (hidden until items selected) -->
+    <div id="cart-section">
+      <label class="field-label">הסל שלך</label>
+      <div id="cart-items"></div>
+    </div>
+
+    <div><!-- notes -->
+      <label class="field-label" for="f-note">הערות</label>
+      <textarea id="f-note" rows="2" placeholder="הערות, בקשות מיוחדות…"></textarea>
+    </div>
+
+    <div id="total-row" class="hidden">
+      <span>סה"כ לתשלום</span>
+      <span id="total-amount"></span>
+    </div>
+
+    <button type="submit" id="submit-btn" disabled>שליחת הזמנה</button>
+
+  </form>
+
+  <!-- Confirmation -->
+  <div id="confirm-state" class="hidden">
+    <span class="confirm-check">✅</span>
+    <h2>ההזמנה התקבלה!</h2>
+    <div class="confirm-card">
+      <div class="confirm-row">
+        <span class="label">מספר הזמנה</span>
+        <span class="value" id="conf-num"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="label">סכום לתשלום</span>
+        <span class="value" id="conf-total"></span>
+      </div>
+      <div class="confirm-row">
+        <span class="label">שעת איסוף</span>
+        <span class="value" id="conf-pickup"></span>
+      </div>
+    </div>
+    <p class="confirm-note">תשלום בדוכן באיסוף.<br>נשמח לראותך! 🥩</p>
+  </div>
+
+</div>
+<script src="js/menu.js"></script>
+<script src="js/api.js"></script>
+<script src="js/form.js"></script>
+</body>
+</html>

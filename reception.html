@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>קבלה — דוכן שניצלים</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ─── Header ──────────────────────────────────────────────────────────────── -->
+<header id="app-header">
+  <div id="header-right">
+    <span id="header-date"></span>
+    <span id="connection-indicator">
+      <span id="connection-dot"></span>
+      <span id="connection-text">מתחבר…</span>
+    </span>
+  </div>
+  <div id="header-stats">
+    <!-- filled by renderStats() -->
+  </div>
+  <div id="header-revenue">
+    <!-- filled by renderStats() -->
+  </div>
+</header>
+
+<!-- ─── Toolbar / Tabs ──────────────────────────────────────────────────────── -->
+<div id="toolbar">
+  <button class="tab-btn active" data-tab="active">פעיל</button>
+  <button class="tab-btn" data-tab="completed">הושלם <span id="completed-count"></span></button>
+  <button class="tab-btn" data-tab="history">היסטוריה</button>
+  <div id="toolbar-actions">
+    <button class="btn btn-secondary" id="backup-btn">⬇ גיבוי</button>
+    <button class="btn btn-primary"   id="summary-btn">📊 סיכום יום</button>
+  </div>
+</div>
+
+<!-- ─── Main Layout ─────────────────────────────────────────────────────────── -->
+<div id="main-layout">
+
+  <!-- Right panel: new order form -->
+  <aside id="form-panel">
+    <h2>הזמנה חדשה</h2>
+
+    <div class="form-field">
+      <label for="order-name">שם</label>
+      <input type="text" id="order-name" placeholder="שם הלקוח" autocomplete="off" autocorrect="off">
+    </div>
+
+    <div id="menu-section">
+      <div class="section-label">אוכל</div>
+      <div class="menu-grid" id="food-grid"></div>
+      <div class="section-label">שתייה</div>
+      <div class="menu-grid" id="drinks-grid"></div>
+    </div>
+
+    <div class="form-field">
+      <label>סל</label>
+      <div id="cart"><div id="cart-empty">לא נבחרו פריטים</div></div>
+      <div id="cart-total"></div>
+    </div>
+
+    <div class="form-field">
+      <label for="order-note">הערות</label>
+      <textarea id="order-note" rows="2" placeholder="אופציונלי…"></textarea>
+    </div>
+
+    <button id="submit-order-btn" disabled>➕ הוסף הזמנה</button>
+  </aside>
+
+  <!-- Left panel: order lists + history -->
+  <main id="orders-panel">
+
+    <!-- Active orders tab -->
+    <div id="active-tab-content">
+      <div class="orders-grid" id="orders-list"></div>
+    </div>
+
+    <!-- Completed orders tab -->
+    <div id="completed-tab-content" class="hidden">
+      <div class="orders-grid" id="completed-list"></div>
+    </div>
+
+    <!-- History tab -->
+    <div id="history-tab-content" class="hidden">
+      <div id="history-dates"></div>
+      <div id="history-content"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ─── Daily Summary Modal ─────────────────────────────────────────────────── -->
+<div id="summary-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📊 סיכום יום</h2>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div id="summary-content"></div>
+  </div>
+</div>
+
+<script src="js/menu.js"></script>
+<script src="js/api.js"></script>
+<script src="js/local-db.js"></script>
+<script src="js/reception.js"></script>
+</body>
+</html>
