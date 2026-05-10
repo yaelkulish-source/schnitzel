@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ציפסרים — דוכן שניצלים</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Arial, sans-serif;
+      direction: rtl;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #fef9c3;
+      transition: background 0.7s ease;
+      color: #111;
+    }
+    body.urgent-bg { background: #fee2e2; }
+
+    /* ─── header ─────────────────────────────────────────────────────────── */
+    #fryer-header {
+      background: #1e3a5f;
+      color: #fff;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-shrink: 0;
+    }
+    .fryer-title { font-size: 1.1rem; font-weight: 800; opacity: 0.9; }
+    #current-time { font-size: 2.4rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+    #conn-wrap { margin-right: auto; display: flex; align-items: center; gap: 6px; font-size: 0.85rem; opacity: 0.85; }
+    #conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
+    #conn-dot.connected { background: #4ade80; }
+
+    /* ─── scrollable main ────────────────────────────────────────────────── */
+    #fryer-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ─── aggregate — "להכין עכשיו" ─────────────────────────────────────── */
+    #aggregate-section {
+      background: rgba(255,255,255,0.72);
+      border-radius: 14px;
+      padding: 14px 18px;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #4b5563;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      margin-bottom: 10px;
+    }
+
+    .agg-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1.5px solid rgba(0,0,0,0.07);
+    }
+    .agg-row:last-child { border-bottom: none; }
+    .agg-emoji { font-size: 1.9rem; width: 2.4rem; text-align: center; flex-shrink: 0; }
+    .agg-name  { flex: 1; font-size: 1.55rem; font-weight: 700; }
+    .agg-count { font-size: 2.8rem; font-weight: 900; color: #1d4ed8; min-width: 72px; text-align: left; line-height: 1; }
+
+    .agg-empty { font-size: 1.4rem; color: #9ca3af; text-align: center; padding: 16px 0; }
+
+    /* ─── order cards ────────────────────────────────────────────────────── */
+    #orders-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .fryer-card {
+      background: #fff;
+      border: 3px solid #d1d5db;
+      border-radius: 14px;
+      padding: 14px;
+      min-width: 185px;
+      flex: 1;
+      max-width: 265px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.09);
+    }
+    .fryer-card.card-cooking { border-color: #d97706; background: #fffdf0; }
+    .fryer-card.card-urgent  {
+      border-color: #dc2626 !important;
+      background: #fff5f5 !important;
+      animation: pulse-card 1.1s ease-in-out infinite;
+    }
+    @keyframes pulse-card {
+      0%, 100% { box-shadow: 0 0 0 0   rgba(220,38,38,.45); }
+      50%       { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-num  { font-size: 2.1rem; font-weight: 900; color: #1d4ed8; line-height: 1; }
+    .card-name { font-size: 1.05rem; font-weight: 700; flex: 1; }
+
+    .status-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-cooking { background: #fef3c7; color: #92400e; }
+    .badge-waiting { background: #f3f4f6; color: #374151; }
+
+    .card-items { font-size: 1rem; font-weight: 600; line-height: 1.55; }
+    .card-item-qty { font-weight: 900; color: #1d4ed8; }
+
+    .card-pickup { font-size: 0.88rem; font-weight: 600; color: #374151; }
+    .card-timer  { font-weight: 700; margin-right: 4px; }
+    .card-timer.urgent { color: #dc2626; font-size: 1rem; }
+
+    .ready-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.3rem;
+      font-weight: 900;
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .ready-btn:active:not(:disabled) { opacity: 0.85; transform: scale(0.97); }
+    .ready-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .cards-empty { font-size: 1.6rem; color: #6b7280; text-align: center; padding: 24px; }
+
+    /* ─── urgent bar (bottom) ────────────────────────────────────────────── */
+    #urgent-bar {
+      background: #dc2626;
+      color: #fff;
+      padding: 12px 20px;
+      flex-shrink: 0;
+      display: none;
+    }
+    #urgent-bar.visible { display: block; }
+
+    .urgent-bar-label { font-size: 0.8rem; font-weight: 800; opacity: 0.8; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .urgent-row { font-size: 1.55rem; font-weight: 800; padding: 2px 0; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header id="fryer-header">
+  <span class="fryer-title">דוכן שניצלים</span>
+  <span id="current-time">--:--</span>
+  <div id="conn-wrap">
+    <span id="conn-dot"></span>
+    <span id="conn-text">מתחבר…</span>
+  </div>
+</header>
+
+<!-- Scrollable main -->
+<main id="fryer-main">
+
+  <!-- Top: aggregate "what to cook" -->
+  <section id="aggregate-section">
+    <div class="section-title">להכין עכשיו</div>
+    <!-- filled by renderAggregate() -->
+  </section>
+
+  <!-- Middle: individual order cards -->
+  <div id="orders-section">
+    <!-- filled by renderCards() -->
+  </div>
+
+</main>
+
+<!-- Bottom: urgent alerts (hidden until needed) -->
+<div id="urgent-bar">
+  <div class="urgent-bar-label">⚠️ דחוף</div>
+  <div id="urgent-rows"></div>
+</div>
+
+<script src="js/menu.js"></script>
+<script src="js/api.js"></script>
+<script src="js/local-db.js"></script>
+<script src="js/fryer.js"></script>
+</body>
+</html>
