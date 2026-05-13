@@ -1,22 +1,20 @@
 // Reception screen — Tablet 1.
-// Handles: new order entry, order card rendering, status/payment updates,
-// urgency alerts, countdown timers, daily summary, backup, and history.
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
 // ─── state ────────────────────────────────────────────────────────────────────
 
 const state = {
-  orders:       [],    // today's orders (all statuses)
+  orders:       [],
   tab:          'active',
   historyDates: [],
   historyDate:  null,
+  boothOpen:    false,
 };
 
-// cart: MENU item id → quantity
-const cartQty = new Map();
+let pendingCollectId = null;
 
-// tracks previous urgency status per order id to detect threshold crossings
+const cartQty    = new Map();
 const prevUrgent = new Map();
 
 // ─── pure helpers ─────────────────────────────────────────────────────────────
@@ -25,7 +23,6 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Returns minutes until "HH:MM" today, or null if no pickup time.
 function minutesUntil(timeStr) {
   if (!timeStr) return null;
   const now = new Date();
@@ -41,7 +38,6 @@ function formatCountdown(mins) {
   return `${mins} דק׳`;
 }
 
-// Convert "054XXXXXXX" → "97254XXXXXXX" for wa.me links.
 function toWaPhone(phone) {
   const d = String(phone || '').replace(/\D/g, '');
   if (!d) return null;
@@ -59,7 +55,6 @@ function formatDateHe(dateStr) {
 const STATUS_LABEL = { waiting: 'ממתין', cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף' };
 const PAY_LABEL    = { cash: 'מזומן', bit: 'ביט', paybox: 'פייבוקס', pending: 'לא שולם' };
 
-// Is a payment method button the "active" one for this order?
 function isPayActive(order, method) {
   return method === 'pending' ? !order.paid : (order.paid && order.payment_method === method);
 }
@@ -115,13 +110,11 @@ function cartToItems() {
 function renderCart() {
   const cartEl  = document.getElementById('cart');
   const totalEl = document.getElementById('cart-total');
-
   if (cartQty.size === 0) {
     cartEl.innerHTML = '<div id="cart-empty">לא נבחרו פריטים</div>';
     totalEl.textContent = '';
     return;
   }
-
   let html = '';
   for (const [id, qty] of cartQty) {
     const item = MENU.byId[id];
@@ -164,7 +157,6 @@ function renderItemGroup(containerId, items) {
 }
 
 function onMenuItemClick(itemId) {
-  // First tap: add with qty 1. Subsequent taps: increment qty.
   cartAdd(itemId);
 }
 
@@ -196,6 +188,10 @@ async function submitOrder() {
 // ─── order actions ────────────────────────────────────────────────────────────
 
 async function changeStatus(id, status) {
+  if (status === 'done') {
+    showPaymentPopup(id);
+    return;
+  }
   try {
     await api.patch(`/api/orders/${id}`, { status });
   } catch { alert('שגיאה בעדכון סטטוס'); }
@@ -235,6 +231,69 @@ async function cancelOrder(id, name) {
   } catch { alert('שגיאה בביטול הזמנה'); }
 }
 
+async function deleteOrder(id, name) {
+  if (!confirm(`למחוק את הזמנה #${id} של ${name}?\nפעולה זו אינה הפיכה.`)) return;
+  try {
+    await api.delete(`/api/orders/${id}`);
+  } catch { alert('שגיאה במחיקת הזמנה'); }
+}
+
+async function clearCompleted() {
+  const done = state.orders.filter(o => o.status === 'done');
+  if (!done.length) { alert('אין הזמנות שהושלמו למחיקה'); return; }
+  if (!confirm(`למחוק את כל ${done.length} ההזמנות שהושלמו היום?`)) return;
+  if (!confirm('אישור סופי: המחיקה אינה הפיכה. להמשיך?')) return;
+  try {
+    await api.delete(`/api/orders/completed?date=${TODAY}`);
+  } catch { alert('שגיאה בניקוי הזמנות'); }
+}
+
+// ─── payment popup ────────────────────────────────────────────────────────────
+
+function showPaymentPopup(id) {
+  pendingCollectId = id;
+  document.getElementById('payment-modal').classList.remove('hidden');
+}
+
+function closePaymentModal() {
+  pendingCollectId = null;
+  document.getElementById('payment-modal').classList.add('hidden');
+}
+
+async function collectWithPayment(method) {
+  const id = pendingCollectId;
+  closePaymentModal();
+  if (id === null) return;
+  try {
+    if (method === 'later') {
+      await api.patch(`/api/orders/${id}`, { status: 'done', paid: false, payment_method: 'pending' });
+    } else {
+      await api.patch(`/api/orders/${id}`, { status: 'done', paid: true, payment_method: method });
+    }
+  } catch { alert('שגיאה בעדכון הזמנה'); }
+}
+
+// ─── booth toggle ─────────────────────────────────────────────────────────────
+
+async function toggleBooth() {
+  try {
+    await api.patch('/api/booth', { open: !state.boothOpen });
+    // state.boothOpen updated via WS booth:updated broadcast
+  } catch { alert('שגיאה בעדכון מצב הדוכן'); }
+}
+
+function renderBoothToggle() {
+  const btn = document.getElementById('booth-toggle-btn');
+  if (!btn) return;
+  if (state.boothOpen) {
+    btn.textContent = '🟢 דוכן פתוח';
+    btn.className = 'btn booth-toggle booth-open';
+  } else {
+    btn.textContent = '🔴 דוכן סגור';
+    btn.className = 'btn booth-toggle booth-closed';
+  }
+}
+
 // ─── sorting ──────────────────────────────────────────────────────────────────
 
 function sortedActive() {
@@ -248,17 +307,14 @@ function sortedActive() {
       const advA = mA !== null && !urgA;
       const advB = mB !== null && !urgB;
 
-      // 1. Urgent advance orders, soonest first
       if (urgA && !urgB) return -1;
       if (!urgA && urgB) return 1;
       if (urgA && urgB)  return mA - mB;
 
-      // 2. Non-urgent advance orders, by pickup time
       if (advA && !advB) return -1;
       if (!advA && advB) return 1;
       if (advA && advB)  return (a.pickup_time || '').localeCompare(b.pickup_time || '');
 
-      // 3. Walk-in orders, by arrival (id)
       return a.id - b.id;
     });
 }
@@ -267,8 +323,8 @@ function sortedActive() {
 
 function renderAll() {
   renderStats();
-  if (state.tab === 'active')    renderOrderGrid('orders-list',   sortedActive(), false);
-  if (state.tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), true);
+  if (state.tab === 'active')    renderOrderGrid('orders-list',    sortedActive(), 'active');
+  if (state.tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), 'completed');
   updateCompletedBadge();
 }
 
@@ -304,22 +360,24 @@ function renderStats() {
     <span class="rev-item rev-pending">ממתין: ${revPending}₪</span>`;
 }
 
-function renderOrderGrid(containerId, orders, readonly) {
+// mode: 'active' | 'completed' | 'history'
+function renderOrderGrid(containerId, orders, mode) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (!orders.length) {
     el.innerHTML = '<div class="empty-state">אין הזמנות</div>';
     return;
   }
-  el.innerHTML = orders.map(o => buildCard(o, readonly)).join('');
+  el.innerHTML = orders.map(o => buildCard(o, mode)).join('');
 }
 
-function buildCard(order, readonly) {
+function buildCard(order, mode) {
   const mins        = minutesUntil(order.pickup_time);
   const isCancelled = order.status === 'cancelled';
   const isUrgent    = mins !== null && mins <= 10 && order.status !== 'done' && !isCancelled;
   const isReady     = order.status === 'ready';
   const isWa        = order.source === 'whatsapp_form';
+  const isUnpaid    = order.status === 'done' && !order.paid;
 
   const cardClass = ['order-card',
     isUrgent    ? 'card-urgent'    : '',
@@ -327,14 +385,12 @@ function buildCard(order, readonly) {
     isCancelled ? 'card-cancelled' : '',
   ].filter(Boolean).join(' ');
 
-  // Items
   const itemsHtml = order.items.map(item => `
     <div class="card-item">
       ${item.quantity}× ${esc(item.menu_item)} — ${item.price * item.quantity}₪
       ${item.spreads?.length ? `<div class="card-item-spreads">${esc(item.spreads.join(' · '))}</div>` : ''}
     </div>`).join('');
 
-  // Meta row (total, pickup, timer, note)
   const timerClass = isUrgent ? 'meta-timer urgent' : 'meta-timer';
   const metaParts  = [
     `<span class="meta-total">${order.total}₪</span>`,
@@ -343,39 +399,64 @@ function buildCard(order, readonly) {
     order.note ? `<span class="meta-note">💬 ${esc(order.note)}</span>` : '',
   ].filter(Boolean).join('');
 
-  // Status buttons (active tab only)
-  const statusHtml = readonly ? '' : `
-    <div class="status-buttons">
-      ${['waiting','cooking','ready','done'].map(s => `
-        <button class="status-btn${order.status === s ? ' s-active' : ''}"
-          data-status="${s}"
-          onclick="changeStatus(${order.id},'${s}')"
-          ${order.status === s ? 'disabled' : ''}>
-          ${STATUS_LABEL[s]}
-        </button>`).join('')}
-    </div>`;
+  let statusHtml = '';
+  if (mode === 'active') {
+    statusHtml = `
+      <div class="status-buttons">
+        ${['waiting','cooking','ready','done'].map(s => `
+          <button class="status-btn${order.status === s ? ' s-active' : ''}"
+            data-status="${s}"
+            onclick="changeStatus(${order.id},'${s}')"
+            ${order.status === s ? 'disabled' : ''}>
+            ${STATUS_LABEL[s]}
+          </button>`).join('')}
+      </div>`;
+  }
 
-  // Payment row
-  const payHtml = readonly
-    ? `<div class="payment-row">
-         <span class="pay-display ${order.paid ? 'is-paid' : 'is-pending'}">
-           ${PAY_LABEL[order.payment_method] || 'לא שולם'}${order.paid ? ' ✓' : ''}
-         </span>
-       </div>`
-    : `<div class="payment-row">
-         ${['cash','bit','paybox','pending'].map(m => `
-           <button class="pay-btn${isPayActive(order, m) ? ' p-active' : ''}"
-             data-pay="${m}"
-             onclick="changePayment(${order.id},'${m}')">${PAY_LABEL[m]}</button>`).join('')}
-         ${isWa && isReady ? `<button class="whatsapp-btn" onclick="sendWhatsAppUpdate(${order.id})">📱 עדכן לקוח</button>` : ''}
-         ${order.pickup_time ? `
-           <button id="reminder-${order.id}" class="reminder-btn"
-             style="display:${mins !== null && mins > 0 && mins <= 10 ? '' : 'none'}"
-             onclick="sendReminder(${order.id})">🔔 תזכורת</button>` : ''}
-       </div>`;
+  let payHtml = '';
+  if (mode === 'active') {
+    payHtml = `
+      <div class="payment-row">
+        ${['cash','bit','paybox','pending'].map(m => `
+          <button class="pay-btn${isPayActive(order, m) ? ' p-active' : ''}"
+            data-pay="${m}"
+            onclick="changePayment(${order.id},'${m}')">${PAY_LABEL[m]}</button>`).join('')}
+        ${isWa && isReady ? `<button class="whatsapp-btn" onclick="sendWhatsAppUpdate(${order.id})">📱 עדכן לקוח</button>` : ''}
+        ${order.pickup_time ? `
+          <button id="reminder-${order.id}" class="reminder-btn"
+            style="display:${mins !== null && mins > 0 && mins <= 10 ? '' : 'none'}"
+            onclick="sendReminder(${order.id})">🔔 תזכורת</button>` : ''}
+      </div>`;
+  } else if (mode === 'completed') {
+    if (isUnpaid) {
+      payHtml = `
+        <div class="payment-row">
+          ${['cash','bit','paybox'].map(m => `
+            <button class="pay-btn" data-pay="${m}"
+              onclick="changePayment(${order.id},'${m}')">${PAY_LABEL[m]}</button>`).join('')}
+        </div>`;
+    } else {
+      payHtml = `
+        <div class="payment-row">
+          <span class="pay-display is-paid">${PAY_LABEL[order.payment_method] || ''} ✓</span>
+        </div>`;
+    }
+  } else {
+    // history — read-only
+    payHtml = `
+      <div class="payment-row">
+        <span class="pay-display ${order.paid ? 'is-paid' : 'is-pending'}">
+          ${PAY_LABEL[order.payment_method] || 'לא שולם'}${order.paid ? ' ✓' : ''}
+        </span>
+      </div>`;
+  }
 
-  const cancelBtn = (!readonly && !isCancelled)
+  const cancelBtn = (mode === 'active' && !isCancelled)
     ? `<button class="cancel-order-btn" onclick="cancelOrder(${order.id},'${esc(order.name)}')">ביטול הזמנה</button>`
+    : '';
+
+  const deleteBtn = (mode === 'completed')
+    ? `<button class="delete-order-btn" onclick="deleteOrder(${order.id},'${esc(order.name)}')">🗑 מחק</button>`
     : '';
 
   return `
@@ -385,13 +466,15 @@ function buildCard(order, readonly) {
         <span class="order-name">${esc(order.name)}</span>
         <span class="order-source${isWa ? ' wa' : ''}">${isWa ? 'ווצאפ' : 'דוכן'}</span>
         ${isUrgent    ? '<span class="urgent-badge">⚠️ דחוף!</span>'  : ''}
-        ${isCancelled ? '<span class="cancelled-badge">בוטל</span>' : ''}
+        ${isCancelled ? '<span class="cancelled-badge">בוטל</span>'   : ''}
+        ${isUnpaid    ? '<span class="unpaid-badge">ממתין לתשלום</span>' : ''}
       </div>
       <div class="card-items">${itemsHtml}</div>
       <div class="card-meta">${metaParts}</div>
       ${statusHtml}
       ${payHtml}
       ${cancelBtn}
+      ${deleteBtn}
     </div>`;
 }
 
@@ -409,13 +492,13 @@ function tickTimers() {
   for (const order of state.orders) {
     if (!order.pickup_time || order.status === 'done' || order.status === 'cancelled') continue;
 
-    const mins       = minutesUntil(order.pickup_time);
-    const isNowUrg   = mins !== null && mins <= 10;
-    const wasUrg     = prevUrgent.get(order.id);
+    const mins     = minutesUntil(order.pickup_time);
+    const isNowUrg = mins !== null && mins <= 10;
+    const wasUrg   = prevUrgent.get(order.id);
 
     if (wasUrg !== isNowUrg) {
       prevUrgent.set(order.id, isNowUrg);
-      needRerender = true; // urgency crossed threshold → re-sort + re-style
+      needRerender = true;
     }
 
     const timerEl = document.getElementById(`timer-${order.id}`);
@@ -429,7 +512,7 @@ function tickTimers() {
   }
 
   if (needRerender && state.tab === 'active') {
-    renderOrderGrid('orders-list', sortedActive(), false);
+    renderOrderGrid('orders-list', sortedActive(), 'active');
   }
 }
 
@@ -445,11 +528,10 @@ function switchTab(tab) {
   document.getElementById('completed-tab-content').classList.toggle('hidden', tab !== 'completed');
   document.getElementById('history-tab-content').classList.toggle('hidden',   tab !== 'history');
 
-  // Form panel is only needed on the active tab
   document.getElementById('form-panel').style.display = tab === 'active' ? '' : 'none';
   document.getElementById('main-layout').classList.toggle('form-hidden', tab !== 'active');
 
-  if (tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), true);
+  if (tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), 'completed');
   if (tab === 'history')   loadHistoryDates();
 }
 
@@ -509,7 +591,7 @@ async function loadHistoryDay(date) {
       </div>
       <div class="orders-grid" id="history-orders"></div>`;
 
-    renderOrderGrid('history-orders', orders, true);
+    renderOrderGrid('history-orders', orders, 'history');
   } catch {
     contentEl.innerHTML = '<div class="empty-state">שגיאה בטעינת יום</div>';
   }
@@ -556,7 +638,6 @@ async function showDailySummary() {
 // ─── manual backup ────────────────────────────────────────────────────────────
 
 function downloadBackup() {
-  // BOM (﻿) so Excel opens the JSON correctly with Hebrew
   const blob = new Blob(['﻿' + JSON.stringify(state.orders, null, 2)],
     { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -568,38 +649,47 @@ function downloadBackup() {
 // ─── connection indicator ─────────────────────────────────────────────────────
 
 function setConnected(yes) {
-  document.getElementById('connection-dot').className  = yes ? 'connected' : '';
+  document.getElementById('connection-dot').className    = yes ? 'connected' : '';
   document.getElementById('connection-text').textContent = yes ? 'מחובר' : 'מנותק';
 }
 
 // ─── init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  // Static setup
   document.getElementById('header-date').textContent = formatDateHe(TODAY);
   renderMenuGrid();
-  renderStats(); // show zeroes immediately
+  renderStats();
 
-  // Form events
   document.getElementById('order-name').addEventListener('input', refreshSubmitBtn);
   document.getElementById('submit-order-btn').addEventListener('click', submitOrder);
   document.getElementById('summary-btn').addEventListener('click', showDailySummary);
   document.getElementById('backup-btn').addEventListener('click', downloadBackup);
+  document.getElementById('booth-toggle-btn').addEventListener('click', toggleBooth);
+  document.getElementById('clear-completed-btn').addEventListener('click', clearCompleted);
   document.getElementById('modal-close').addEventListener('click', () =>
     document.getElementById('summary-modal').classList.add('hidden'));
   document.getElementById('summary-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
   });
+  document.getElementById('payment-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closePaymentModal();
+  });
 
-  // Tab events
   document.querySelectorAll('.tab-btn').forEach(btn =>
     btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+  // Load booth state
+  try {
+    const booth = await api.get('/api/booth');
+    state.boothOpen = booth.open;
+    renderBoothToggle();
+  } catch { renderBoothToggle(); }
 
   // Load from local IndexedDB cache first (instant render)
   try {
     const cached = await localDB.getByDate(TODAY);
     if (cached.length) { state.orders = cached; renderAll(); }
-  } catch { /* IndexedDB unavailable — continue */ }
+  } catch { /* IndexedDB unavailable */ }
 
   // Fetch authoritative data from server
   try {
@@ -611,7 +701,7 @@ async function init() {
     console.warn('Server unavailable — showing local cache');
   }
 
-  // WebSocket: live updates from other screens / the customer form
+  // WebSocket: live updates
   ws.on('order:created', order => {
     if (order.date !== TODAY) return;
     state.orders.push(order);
@@ -627,11 +717,27 @@ async function init() {
     renderAll();
   });
 
+  ws.on('order:deleted', ({ id }) => {
+    state.orders = state.orders.filter(o => o.id !== id);
+    renderAll();
+  });
+
+  ws.on('orders:cleared', ({ date }) => {
+    if (date === TODAY) {
+      state.orders = state.orders.filter(o => o.status !== 'done');
+      renderAll();
+    }
+  });
+
+  ws.on('booth:updated', ({ open }) => {
+    state.boothOpen = open;
+    renderBoothToggle();
+  });
+
   ws.on('_connected',    () => setConnected(true));
   ws.on('_disconnected', () => setConnected(false));
   ws.connect();
 
-  // Countdown timers — tick every second, full re-render only on urgency change
   setInterval(tickTimers, 1000);
 }
 

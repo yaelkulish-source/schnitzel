@@ -31,6 +31,7 @@
   <button class="tab-btn" data-tab="completed">הושלם <span id="completed-count"></span></button>
   <button class="tab-btn" data-tab="history">היסטוריה</button>
   <div id="toolbar-actions">
+    <button class="btn booth-toggle booth-closed" id="booth-toggle-btn">🔴 דוכן סגור</button>
     <button class="btn btn-secondary" id="backup-btn">⬇ גיבוי</button>
     <button class="btn btn-primary"   id="summary-btn">📊 סיכום יום</button>
   </div>
@@ -79,6 +80,7 @@
 
     <!-- Completed orders tab -->
     <div id="completed-tab-content" class="hidden">
+      <button id="clear-completed-btn">🗑 נקה הושלם</button>
       <div class="orders-grid" id="completed-list"></div>
     </div>
 
@@ -89,6 +91,19 @@
     </div>
 
   </main>
+</div>
+
+<!-- ─── Payment Modal ───────────────────────────────────────────────────────── -->
+<div id="payment-modal" class="hidden">
+  <div class="pay-modal-box">
+    <h3>💳 אמצעי תשלום</h3>
+    <div class="pay-modal-buttons">
+      <button class="pay-modal-btn cash-btn"   onclick="collectWithPayment('cash')">מזומן</button>
+      <button class="pay-modal-btn bit-btn"    onclick="collectWithPayment('bit')">ביט</button>
+      <button class="pay-modal-btn paybox-btn" onclick="collectWithPayment('paybox')">פייבוקס</button>
+      <button class="pay-modal-btn later-btn"  onclick="collectWithPayment('later')">אחר כך</button>
+    </div>
+  </div>
 </div>
 
 <!-- ─── Daily Summary Modal ─────────────────────────────────────────────────── -->

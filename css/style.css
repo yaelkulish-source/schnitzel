@@ -595,6 +595,111 @@ body {
 .summary-row:last-child { border-bottom: none; }
 .summary-row.total-row  { font-size: 1.1rem; font-weight: 800; padding-top: 10px; }
 
+/* ─── booth toggle ───────────────────────────────────────────────────────────── */
+.booth-toggle {
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.booth-toggle.booth-open   { background: var(--success-light); color: var(--success); border-color: var(--success); }
+.booth-toggle.booth-closed { background: var(--danger-light);  color: var(--danger);  border-color: var(--danger); }
+
+/* ─── payment modal ──────────────────────────────────────────────────────────── */
+#payment-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+#payment-modal.hidden { display: none; }
+
+.pay-modal-box {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 92%;
+  max-width: 360px;
+  text-align: center;
+}
+.pay-modal-box h3 { font-size: 1.1rem; font-weight: 800; margin-bottom: 18px; }
+
+.pay-modal-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pay-modal-btn {
+  padding: 14px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 800;
+  transition: background .12s, border-color .12s;
+}
+.pay-modal-btn:active { opacity: .85; }
+.pay-modal-btn.cash-btn   { border-color: var(--success); color: var(--success); }
+.pay-modal-btn.cash-btn:hover   { background: var(--success-light); }
+.pay-modal-btn.bit-btn    { border-color: var(--primary); color: var(--primary); }
+.pay-modal-btn.bit-btn:hover    { background: var(--primary-light); }
+.pay-modal-btn.paybox-btn { border-color: #7c3aed; color: #7c3aed; }
+.pay-modal-btn.paybox-btn:hover { background: #f5f3ff; }
+.pay-modal-btn.later-btn  { border-color: var(--muted); color: var(--muted); }
+.pay-modal-btn.later-btn:hover  { background: #f9fafb; }
+
+/* ─── unpaid badge ───────────────────────────────────────────────────────────── */
+.unpaid-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: #fee2e2;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+/* ─── delete button ──────────────────────────────────────────────────────────── */
+.delete-order-btn {
+  display: block;
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-align: right;
+}
+.delete-order-btn:hover,
+.delete-order-btn:active { color: var(--danger); }
+
+/* ─── clear completed button ─────────────────────────────────────────────────── */
+#clear-completed-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 9px 16px;
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--radius);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+#clear-completed-btn:active { opacity: .85; }
+
 /* ─── responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 680px) {
   body { overflow: auto; }

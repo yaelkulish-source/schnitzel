@@ -17,7 +17,10 @@ const PICKUP_TIMES = (() => {
 
 // ─── state ────────────────────────────────────────────────────────────────────
 
-let selectedPickup = null;
+let selectedPickup  = null;
+let boothOpen       = false;
+let formInitialized = false;
+
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Set<spreadName>
 
@@ -27,12 +30,29 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function isOpen() {
-  if (new URLSearchParams(location.search).has('preview')) return true;
-  const now = new Date();
-  if (now.getDay() !== 2) return false; // 2 = Tuesday
-  const mins = now.getHours() * 60 + now.getMinutes();
-  return mins >= 18 * 60 && mins <= 20 * 60 + 30;
+function applyBoothState() {
+  const closedEl  = document.getElementById('closed-state');
+  const formEl    = document.getElementById('order-form');
+  const confirmEl = document.getElementById('confirm-state');
+
+  // Don't change anything if we're already on the confirmation screen
+  if (confirmEl && !confirmEl.classList.contains('hidden')) return;
+
+  if (boothOpen) {
+    closedEl.classList.add('hidden');
+    if (!formInitialized) {
+      renderPickupGrid();
+      renderMenuGrids();
+      document.getElementById('f-name').addEventListener('input',  refreshSubmit);
+      document.getElementById('f-phone').addEventListener('input', refreshSubmit);
+      document.getElementById('order-form').addEventListener('submit', handleSubmit);
+      formInitialized = true;
+    }
+    formEl.classList.remove('hidden');
+  } else {
+    closedEl.classList.remove('hidden');
+    formEl.classList.add('hidden');
+  }
 }
 
 function calcTotal() {
@@ -255,20 +275,30 @@ function showConfirmation(order) {
 
 // ─── init ─────────────────────────────────────────────────────────────────────
 
-function init() {
-  if (!isOpen()) {
-    document.getElementById('closed-state').classList.remove('hidden');
+async function init() {
+  const isPreview = new URLSearchParams(location.search).has('preview');
+
+  if (isPreview) {
+    boothOpen = true;
+    applyBoothState();
     return;
   }
 
-  renderPickupGrid();
-  renderMenuGrids();
+  try {
+    const booth = await api.get('/api/booth');
+    boothOpen = booth.open;
+  } catch {
+    boothOpen = false;
+  }
 
-  document.getElementById('f-name').addEventListener('input',  refreshSubmit);
-  document.getElementById('f-phone').addEventListener('input', refreshSubmit);
-  document.getElementById('order-form').addEventListener('submit', handleSubmit);
+  applyBoothState();
 
-  document.getElementById('order-form').classList.remove('hidden');
+  // Listen for real-time booth open/close from reception screen
+  ws.on('booth:updated', ({ open }) => {
+    boothOpen = open;
+    applyBoothState();
+  });
+  ws.connect();
 }
 
 document.addEventListener('DOMContentLoaded', init);

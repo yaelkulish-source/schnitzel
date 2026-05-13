@@ -36,6 +36,12 @@ const api = {
     if (!res.ok) throw new Error(`PATCH ${path} → ${res.status}`);
     return res.json();
   },
+
+  async delete(path) {
+    const res = await fetch(API_BASE + path, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
+    return res.json();
+  },
 };
 
 // ─── WebSocket (auto-reconnect) ───────────────────────────────────────────────
