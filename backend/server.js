@@ -3,6 +3,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const cors = require('cors');
 const ordersRouter = require('./routes/orders');
+const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
@@ -29,6 +30,19 @@ app.use((req, _res, next) => {
 // ─── routes ───────────────────────────────────────────────────────────────────
 
 app.use('/api/orders', ordersRouter);
+
+app.get('/api/booth', async (_req, res) => {
+  const open = await db.getBooth();
+  res.json({ open });
+});
+
+app.patch('/api/booth', async (req, res) => {
+  const { open } = req.body;
+  if (typeof open !== 'boolean') return res.status(400).json({ error: 'open must be boolean' });
+  await db.setBooth(open);
+  broadcast({ type: 'booth:updated', payload: { open } });
+  res.json({ open });
+});
 
 app.get('/health', (_req, res) => res.json({ ok: true, clients: wss.clients.size }));
 

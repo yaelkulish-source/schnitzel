@@ -38,6 +38,23 @@ router.post('/', async (req, res) => {
   res.status(201).json(order);
 });
 
+// DELETE /api/orders/completed?date=YYYY-MM-DD — must be before /:id
+router.delete('/completed', async (req, res) => {
+  const date = req.query.date || new Date().toISOString().slice(0, 10);
+  await db.deleteCompletedOrders(date);
+  req.broadcast({ type: 'orders:cleared', payload: { date } });
+  res.json({ ok: true });
+});
+
+// DELETE /api/orders/:id — hard delete a single order
+router.delete('/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
+  await db.deleteOrder(id);
+  req.broadcast({ type: 'order:deleted', payload: { id } });
+  res.json({ ok: true });
+});
+
 // PATCH /api/orders/:id — update status, payment, note, etc.
 router.patch('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);

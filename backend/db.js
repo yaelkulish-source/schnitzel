@@ -107,4 +107,21 @@ async function getDistinctDates() {
   return [...new Set(docs.map(d => d.date))].sort().reverse();
 }
 
-module.exports = { getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates };
+async function getBooth() {
+  const doc = await ds.findOneAsync({ _id: '__booth__' });
+  return doc ? doc.open : false;
+}
+
+async function setBooth(open) {
+  await ds.updateAsync({ _id: '__booth__' }, { $set: { open } }, { upsert: true });
+}
+
+async function deleteOrder(id) {
+  await ds.removeAsync({ id }, {});
+}
+
+async function deleteCompletedOrders(date) {
+  await ds.removeAsync({ date, status: 'done' }, { multi: true });
+}
+
+module.exports = { getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, deleteOrder, deleteCompletedOrders };
