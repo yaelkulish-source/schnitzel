@@ -59,6 +59,20 @@ function isPayActive(order, method) {
   return method === 'pending' ? !order.paid : (order.paid && order.payment_method === method);
 }
 
+function formatSpreads(spreads, quantity) {
+  if (!spreads?.length) return '';
+  if (Array.isArray(spreads[0])) {
+    // New format: string[][] — one array per unit
+    const lines = spreads.map((unit, i) => {
+      const prefix = quantity > 1 ? `#${i + 1}: ` : '';
+      return unit.length ? prefix + esc(unit.join(' · ')) : '';
+    }).filter(Boolean);
+    return lines.length ? `<div class="card-item-spreads">${lines.join('<br>')}</div>` : '';
+  }
+  // Old format: string[] (backward compat)
+  return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
+}
+
 // ─── cart ─────────────────────────────────────────────────────────────────────
 
 function cartAdd(itemId) {
@@ -388,7 +402,7 @@ function buildCard(order, mode) {
   const itemsHtml = order.items.map(item => `
     <div class="card-item">
       ${item.quantity}× ${esc(item.menu_item)} — ${item.price * item.quantity}₪
-      ${item.spreads?.length ? `<div class="card-item-spreads">${esc(item.spreads.join(' · '))}</div>` : ''}
+      ${formatSpreads(item.spreads, item.quantity)}
     </div>`).join('');
 
   const timerClass = isUrgent ? 'meta-timer urgent' : 'meta-timer';

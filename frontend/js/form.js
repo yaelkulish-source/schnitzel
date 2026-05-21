@@ -22,7 +22,7 @@ let boothOpen       = false;
 let formInitialized = false;
 
 const cartQty     = new Map(); // item id → quantity
-const cartSpreads = new Map(); // item id → Set<spreadName>
+const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,7 +69,9 @@ function buildItemsArray() {
   for (const [id, qty] of cartQty) {
     const def = MENU.byId[id];
     if (!def) continue;
-    const spreads = def.hasSpreads ? [...(cartSpreads.get(id) ?? [])] : [];
+    const spreads = def.hasSpreads
+      ? (cartSpreads.get(id) ?? []).map(s => [...s])
+      : [];
     items.push({ menu_item: def.name, price: def.price, quantity: qty, spreads });
   }
   return items;
@@ -117,13 +119,13 @@ function renderGroup(id, items) {
 }
 
 function toggleItem(itemId) {
+  const def = MENU.byId[itemId];
   if (cartQty.has(itemId)) {
-    // Already in cart → bump qty by 1
     cartQty.set(itemId, cartQty.get(itemId) + 1);
+    if (def?.hasSpreads) cartSpreads.get(itemId).push(new Set());
   } else {
     cartQty.set(itemId, 1);
-    const def = MENU.byId[itemId];
-    if (def?.hasSpreads) cartSpreads.set(itemId, new Set());
+    if (def?.hasSpreads) cartSpreads.set(itemId, [new Set()]);
   }
   document.querySelector(`[data-item-id="${itemId}"]`)?.classList.add('selected');
   renderCart();
@@ -138,24 +140,32 @@ function changeQty(itemId, delta) {
     document.querySelector(`[data-item-id="${itemId}"]`)?.classList.remove('selected');
   } else {
     cartQty.set(itemId, q);
+    const def = MENU.byId[itemId];
+    if (def?.hasSpreads) {
+      const arr = cartSpreads.get(itemId) ?? [];
+      if (delta > 0) arr.push(new Set());
+      else arr.pop();
+    }
   }
   renderCart();
   refreshSubmit();
 }
 
-function toggleSpread(itemId, spreadName) {
-  const set = cartSpreads.get(itemId);
+function toggleSpread(itemId, unitIndex, spreadName) {
+  const arr = cartSpreads.get(itemId);
+  if (!arr) return;
+  const set = arr[unitIndex];
   if (!set) return;
   set.has(spreadName) ? set.delete(spreadName) : set.add(spreadName);
-  // Re-render only the spread buttons for this item (avoid full cart re-render)
-  renderSpreadButtons(itemId);
+  renderSpreadButtons(itemId, unitIndex);
 }
 
-function renderSpreadButtons(itemId) {
+function renderSpreadButtons(itemId, unitIndex) {
+  const set = (cartSpreads.get(itemId) ?? [])[unitIndex] ?? new Set();
   const allSpreads = [...MENU.spreadsMain, ...MENU.spreadsCondiments];
   allSpreads.forEach(name => {
-    const btn = document.querySelector(`[data-spread="${itemId}:${name}"]`);
-    if (btn) btn.classList.toggle('selected', cartSpreads.get(itemId)?.has(name));
+    const btn = document.querySelector(`[data-spread="${itemId}:${unitIndex}:${name}"]`);
+    if (btn) btn.classList.toggle('selected', set.has(name));
   });
 }
 
@@ -187,7 +197,7 @@ function buildCartCard(itemId, qty) {
   if (!def) return '';
   const lineTotal = def.price * qty;
 
-  const spreadsSectionHtml = def.hasSpreads ? buildSpreadsSection(itemId) : '';
+  const spreadsSectionHtml = def.hasSpreads ? buildSpreadsSection(itemId, qty) : '';
 
   return `
     <div class="cart-card" id="cc-${itemId}">
@@ -204,27 +214,38 @@ function buildCartCard(itemId, qty) {
     </div>`;
 }
 
-function buildSpreadsSection(itemId) {
-  const selected = cartSpreads.get(itemId) ?? new Set();
+function buildSpreadsSection(itemId, qty) {
+  const spreadsArr = cartSpreads.get(itemId) ?? [];
+  const units = [];
 
-  const mainBtns = MENU.spreadsMain.map(name => `
-    <button type="button"
-      class="spread-btn${selected.has(name) ? ' selected' : ''}"
-      data-spread="${itemId}:${name}"
-      onclick="toggleSpread('${itemId}','${name}')">${esc(name)}</button>`).join('');
+  for (let i = 0; i < qty; i++) {
+    const selected = spreadsArr[i] ?? new Set();
 
-  const condBtns = MENU.spreadsCondiments.map(name => `
-    <button type="button"
-      class="spread-btn${selected.has(name) ? ' selected' : ''}"
-      data-spread="${itemId}:${name}"
-      onclick="toggleSpread('${itemId}','${name}')">${esc(name)}</button>`).join('');
+    const mainBtns = MENU.spreadsMain.map(name => `
+      <button type="button"
+        class="spread-btn${selected.has(name) ? ' selected' : ''}"
+        data-spread="${itemId}:${i}:${name}"
+        onclick="toggleSpread('${itemId}',${i},'${name}')">${esc(name)}</button>`).join('');
+
+    const condBtns = MENU.spreadsCondiments.map(name => `
+      <button type="button"
+        class="spread-btn${selected.has(name) ? ' selected' : ''}"
+        data-spread="${itemId}:${i}:${name}"
+        onclick="toggleSpread('${itemId}',${i},'${name}')">${esc(name)}</button>`).join('');
+
+    units.push(`
+      <div class="spread-unit">
+        ${qty > 1 ? `<div class="spread-unit-label">#${i + 1}</div>` : ''}
+        <div class="spreads-group">${mainBtns}</div>
+        <hr class="spread-divider">
+        <div class="spreads-group">${condBtns}</div>
+      </div>`);
+  }
 
   return `
     <div class="spreads-section">
       <div class="spreads-title">ממרחים</div>
-      <div class="spreads-group">${mainBtns}</div>
-      <hr class="spread-divider">
-      <div class="spreads-group">${condBtns}</div>
+      ${units.join('')}
     </div>`;
 }
 
