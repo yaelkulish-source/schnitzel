@@ -4,7 +4,6 @@
 const MENU = {
   food: [
     { id: 'chips',                   emoji: '🍟',      name: "צ'יפס",                   price: 10, hasSpreads: false },
-    { id: 'chips_special',           emoji: '🍟',      name: "צ'יפס ספיישל",             price: 15, hasSpreads: false, desc: 'ברוטב פטרוזיליה ושום' },
     { id: 'schnitzelons',            emoji: '🍗',      name: 'שניצלונים',                 price: 25, hasSpreads: false },
     { id: 'schnitzelons_chips',      emoji: '🍗🍟',   name: "שניצלונים + צ'יפס",        price: 30, hasSpreads: false },
     { id: 'schnitzel_challah',       emoji: '🍗🥖',   name: 'שניצל בחלה',               price: 35, hasSpreads: true  },
