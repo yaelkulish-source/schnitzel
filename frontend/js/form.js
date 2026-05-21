@@ -6,13 +6,13 @@
 
 const PICKUP_TIMES = (() => {
   const times = [];
-  for (let h = 18; h <= 20; h++) {
+  for (let h = 12; h <= 14; h++) {
     for (let m = 0; m < 60; m += 15) {
-      if (h === 20 && m > 30) break;
+      if (h === 14 && m > 0) break;
       times.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
     }
   }
-  return times; // 18:00 … 20:30
+  return times; // 12:00 … 14:00
 })();
 
 // ─── state ────────────────────────────────────────────────────────────────────
