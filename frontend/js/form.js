@@ -20,6 +20,7 @@ const PICKUP_TIMES = (() => {
 let selectedPickup  = null;
 let boothOpen       = false;
 let formInitialized = false;
+let boothOpenedAt   = null;
 
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
@@ -28,6 +29,10 @@ const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set pe
 
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatHHMM(date) {
+  return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
 }
 
 function applyBoothState() {
@@ -39,17 +44,27 @@ function applyBoothState() {
   if (confirmEl && !confirmEl.classList.contains('hidden')) return;
 
   if (boothOpen) {
+    if (!boothOpenedAt) boothOpenedAt = new Date();
     closedEl.classList.add('hidden');
     if (!formInitialized) {
       renderPickupGrid();
       renderMenuGrids();
-      document.getElementById('f-name').addEventListener('input',  refreshSubmit);
-      document.getElementById('f-phone').addEventListener('input', refreshSubmit);
+      document.getElementById('f-name').addEventListener('input', refreshSubmit);
+      document.getElementById('f-phone').addEventListener('input', () => {
+        clearFieldError('f-phone', 'err-phone');
+        refreshSubmit();
+      });
       document.getElementById('order-form').addEventListener('submit', handleSubmit);
       formInitialized = true;
     }
     formEl.classList.remove('hidden');
   } else {
+    const msgEl = document.getElementById('booth-hours-msg');
+    if (msgEl) {
+      msgEl.textContent = boothOpenedAt
+        ? `היה פתוח היום מ-${formatHHMM(boothOpenedAt)} עד ${formatHHMM(new Date())}`
+        : 'הדוכן יפתח בקרוב — עדכון יישלח בוואטסאפ';
+    }
     closedEl.classList.remove('hidden');
     formEl.classList.add('hidden');
   }
@@ -79,10 +94,8 @@ function buildItemsArray() {
 
 function refreshSubmit() {
   const name     = document.getElementById('f-name').value.trim();
-  const phone    = document.getElementById('f-phone').value.replace(/\D/g,'');
   const hasItems = cartQty.size > 0;
-  document.getElementById('submit-btn').disabled =
-    !name || phone.length < 9 || !selectedPickup || !hasItems;
+  document.getElementById('submit-btn').disabled = !name || !hasItems;
 }
 
 // ─── pickup time grid ─────────────────────────────────────────────────────────
@@ -98,6 +111,7 @@ function selectPickup(time) {
   selectedPickup = time;
   document.querySelectorAll('.pickup-btn').forEach(b =>
     b.classList.toggle('selected', b.dataset.time === time));
+  clearFieldError('pickup-grid', 'err-pickup');
   refreshSubmit();
 }
 
@@ -121,13 +135,14 @@ function renderGroup(id, items) {
 function toggleItem(itemId) {
   const def = MENU.byId[itemId];
   if (cartQty.has(itemId)) {
-    cartQty.set(itemId, cartQty.get(itemId) + 1);
-    if (def?.hasSpreads) cartSpreads.get(itemId).push(new Set());
+    cartQty.delete(itemId);
+    cartSpreads.delete(itemId);
+    document.querySelector(`[data-item-id="${itemId}"]`)?.classList.remove('selected');
   } else {
     cartQty.set(itemId, 1);
     if (def?.hasSpreads) cartSpreads.set(itemId, [new Set()]);
+    document.querySelector(`[data-item-id="${itemId}"]`)?.classList.add('selected');
   }
-  document.querySelector(`[data-item-id="${itemId}"]`)?.classList.add('selected');
   renderCart();
   refreshSubmit();
 }
@@ -249,10 +264,36 @@ function buildSpreadsSection(itemId, qty) {
     </div>`;
 }
 
+// ─── submit validation helpers ────────────────────────────────────────────────
+
+function clearFieldErrors() {
+  document.getElementById('f-phone')?.classList.remove('field-error-input');
+  document.getElementById('pickup-grid')?.classList.remove('field-error');
+  ['err-phone', 'err-pickup'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
+function clearFieldError(inputId, msgId) {
+  const el = document.getElementById(inputId);
+  if (el) el.classList.remove('field-error-input', 'field-error');
+  const msgEl = document.getElementById(msgId);
+  if (msgEl) msgEl.style.display = 'none';
+}
+
+function showFieldError(inputId, msgId, msg) {
+  const el = document.getElementById(inputId);
+  if (el) el.classList.add(inputId === 'pickup-grid' ? 'field-error' : 'field-error-input');
+  const msgEl = document.getElementById(msgId);
+  if (msgEl) { msgEl.textContent = msg; msgEl.style.display = 'block'; }
+}
+
 // ─── submit ───────────────────────────────────────────────────────────────────
 
 async function handleSubmit(e) {
   e.preventDefault();
+  clearFieldErrors();
 
   const name  = document.getElementById('f-name').value.trim();
   const phone = document.getElementById('f-phone').value.trim();
@@ -260,7 +301,22 @@ async function handleSubmit(e) {
   const items = buildItemsArray();
   const total = calcTotal();
 
-  if (!name || !phone || !selectedPickup || !items.length) return;
+  if (!name || !items.length) return;
+
+  let firstErrorId = null;
+
+  if (phone.replace(/\D/g, '').length < 9) {
+    showFieldError('f-phone', 'err-phone', 'יש להזין מספר טלפון תקין');
+    firstErrorId ??= 'f-phone';
+  }
+  if (!selectedPickup) {
+    showFieldError('pickup-grid', 'err-pickup', 'יש לבחור שעת איסוף');
+    firstErrorId ??= 'pickup-section';
+  }
+  if (firstErrorId) {
+    document.getElementById(firstErrorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
 
   const btn = document.getElementById('submit-btn');
   btn.disabled    = true;

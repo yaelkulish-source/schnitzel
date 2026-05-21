@@ -45,7 +45,7 @@ async function createOrder(data) {
     items:          data.items,
     total:          data.total,
     note:           data.note           || '',
-    status:         'waiting',
+    status:         'cooking',
     payment_method: data.payment_method || 'pending',
     paid:           data.paid           || false,
     created_at:     now,

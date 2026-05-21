@@ -52,7 +52,7 @@ function formatDateHe(dateStr) {
   }).format(new Date(dateStr + 'T12:00:00'));
 }
 
-const STATUS_LABEL = { waiting: 'ממתין', cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף' };
+const STATUS_LABEL = { cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף' };
 const PAY_LABEL    = { cash: 'מזומן', bit: 'ביט', paybox: 'פייבוקס', pending: 'לא שולם' };
 
 function isPayActive(order, method) {
@@ -417,7 +417,7 @@ function buildCard(order, mode) {
   if (mode === 'active') {
     statusHtml = `
       <div class="status-buttons">
-        ${['waiting','cooking','ready','done'].map(s => `
+        ${['cooking','ready','done'].map(s => `
           <button class="status-btn${order.status === s ? ' s-active' : ''}"
             data-status="${s}"
             onclick="changeStatus(${order.id},'${s}')"
@@ -630,8 +630,8 @@ async function showDailySummary() {
         <div class="summary-row"><span>סה"כ הזמנות</span><span>${s.total_orders}</span></div>
         <div class="summary-row"><span>סה"כ מנות</span><span>${totalDishes}</span></div>
         <div class="summary-row"><span>הושלמו</span><span>${s.done}</span></div>
-        <div class="summary-row"><span>ממתינות / בהכנה / מוכן</span>
-          <span>${s.waiting} / ${s.cooking} / ${s.ready}</span></div>
+        <div class="summary-row"><span>בהכנה / מוכן</span>
+          <span>${s.cooking} / ${s.ready}</span></div>
       </div>
       <div class="summary-section">
         <h3>הכנסות</h3>

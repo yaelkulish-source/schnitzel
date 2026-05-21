@@ -44,7 +44,6 @@
       padding: 24px 20px 20px;
       text-align: center;
     }
-    #form-header .stand-emoji { font-size: 2.4rem; display: block; margin-bottom: 6px; }
     #form-header h1 { font-size: 1.4rem; font-weight: 800; }
     #form-header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 3px; }
 
@@ -214,6 +213,12 @@
     }
     .spread-btn.selected { background: var(--green); border-color: var(--green); color: #fff; }
 
+    /* ─── field errors ───────────────────────────────────────────────────────── */
+    @keyframes form-shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+    .field-error-input { border-color: #dc2626 !important; box-shadow: 0 0 0 3px #fee2e2; animation: form-shake 0.25s ease; }
+    .field-error { outline: 2px solid #dc2626; outline-offset: 4px; border-radius: 8px; animation: form-shake 0.25s ease; }
+    .error-msg { color: #dc2626; font-size: 0.82rem; margin-top: 5px; display: none; }
+
     /* ─── total + submit ─────────────────────────────────────────────────── */
     #total-row {
       display: flex;
@@ -283,7 +288,6 @@
 
   <!-- Header (always visible) -->
   <header id="form-header">
-    <span class="stand-emoji">🥩</span>
     <h1>דוכן השניצלים</h1>
     <p>הזמנה מראש — איסוף בדוכן</p>
   </header>
@@ -292,7 +296,7 @@
   <div id="closed-state" class="hidden">
     <span class="lock">🔒</span>
     <h2>הדוכן סגור כרגע</h2>
-    <p>הדוכן פתוח בימי שלישי<br>18:00 – 20:30<br>בקיבוץ</p>
+    <p id="booth-hours-msg"></p>
   </div>
 
   <!-- Order form -->
@@ -306,11 +310,13 @@
     <div><!-- phone -->
       <label class="field-label" for="f-phone">טלפון <span class="required-star">*</span></label>
       <input type="tel" id="f-phone" placeholder="05X-XXXXXXX" autocomplete="tel" inputmode="tel">
+      <p class="error-msg" id="err-phone"></p>
     </div>
 
-    <div><!-- pickup time -->
+    <div id="pickup-section"><!-- pickup time -->
       <label class="field-label">שעת איסוף <span class="required-star">*</span></label>
       <div id="pickup-grid"></div>
+      <p class="error-msg" id="err-pickup"></p>
     </div>
 
     <div><!-- menu -->
