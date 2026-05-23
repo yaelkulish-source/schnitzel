@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>מטגן 🍗</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Arial Hebrew', Tahoma, Arial, sans-serif;
+      background: #1a1a2e;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: #16213e;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #e67e22;
+    }
+
+    .topbar h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #f0a500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .clock {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #aaa;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .add-booth-btn {
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .add-booth-btn:hover { background: #219a52; }
+
+    /* ── Order grid ── */
+    .orders-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 18px;
+      padding: 22px 20px;
+      flex: 1;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #555;
+    }
+    .empty-state .emoji { font-size: 4rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 1.1rem; }
+
+    /* ── Order card ── */
+    .order-card {
+      background: #16213e;
+      border-radius: 16px;
+      padding: 20px 18px 16px;
+      border-right: 5px solid #e67e22;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      animation: slideIn 0.25s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .order-card.source-form  { border-color: #3498db; }
+    .order-card.source-booth { border-color: #e67e22; }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .order-name {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #f0f0f0;
+    }
+
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+    .badge-form  { background: #1b4f72; color: #7fb3d3; }
+    .badge-booth { background: #6e3600; color: #f39c12; }
+
+    .order-items {
+      font-size: 1rem;
+      color: #ccc;
+      line-height: 1.5;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4px;
+    }
+
+    .order-meta {
+      font-size: 0.82rem;
+      color: #888;
+    }
+
+    .pickup-highlight {
+      color: #f39c12;
+      font-weight: 700;
+    }
+
+    .ready-btn {
+      background: linear-gradient(135deg, #27ae60, #1e8449);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 4px 12px rgba(39,174,96,0.3);
+    }
+    .ready-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+    .ready-btn:active { transform: translateY(0); }
+
+    /* ── Countdown chips for upcoming form orders ── */
+    .upcoming-section {
+      padding: 10px 20px 0;
+    }
+
+    .upcoming-bar {
+      background: #0d2137;
+      border-radius: 10px;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: #7fb3d3;
+      flex-wrap: wrap;
+    }
+
+    .upcoming-bar strong { color: #3498db; }
+
+    /* ── Toast ── */
+    .toast-area {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: #1e8449;
+      color: #fff;
+      border-radius: 14px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 6px 28px rgba(0,0,0,0.45);
+      font-size: 0.95rem;
+      font-weight: 600;
+      min-width: 280px;
+      pointer-events: all;
+      animation: toastIn 0.25s ease;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .toast-msg { flex: 1; }
+
+    .undo-btn {
+      background: rgba(255,255,255,0.18);
+      border: 1.5px solid rgba(255,255,255,0.4);
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px 13px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .undo-btn:hover { background: rgba(255,255,255,0.28); }
+
+    /* ── Add booth modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: #1a2a4a;
+      border-radius: 18px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    }
+
+    .modal h2 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #f0a500;
+      margin-bottom: 20px;
+    }
+
+    .modal-group {
+      margin-bottom: 16px;
+    }
+
+    .modal-group label {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #ccc;
+      margin-bottom: 6px;
+    }
+
+    .modal-group input,
+    .modal-group textarea {
+      width: 100%;
+      padding: 11px 14px;
+      background: #0d2137;
+      border: 2px solid #2c4a6e;
+      border-radius: 10px;
+      color: #f0f0f0;
+      font-size: 1rem;
+      font-family: inherit;
+      direction: rtl;
+    }
+    .modal-group input:focus,
+    .modal-group textarea:focus {
+      outline: none;
+      border-color: #e67e22;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .modal-add-btn {
+      flex: 1;
+      padding: 12px;
+      background: #e67e22;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .modal-add-btn:hover { background: #d35400; }
+
+    .modal-cancel-btn {
+      padding: 12px 18px;
+      background: transparent;
+      border: 2px solid #2c4a6e;
+      color: #aaa;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .modal-cancel-btn:hover { border-color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <!-- ══ TOP BAR ══ -->
+  <div class="topbar">
+    <h1>🍗 מטגן</h1>
+    <span class="clock" id="clock">00:00</span>
+    <button class="add-booth-btn" onclick="openBoothModal()">+ הזמנת דוכן</button>
+  </div>
+
+  <!-- Upcoming orders preview (form orders not yet visible) -->
+  <div class="upcoming-section" id="upcomingSection" style="display:none;">
+    <div class="upcoming-bar" id="upcomingBar"></div>
+  </div>
+
+  <!-- ══ ORDERS ══ -->
+  <div class="orders-grid" id="ordersGrid">
+    <div class="empty-state">
+      <div class="emoji">🍗</div>
+      <p>אין הזמנות כרגע</p>
+    </div>
+  </div>
+
+  <!-- ══ TOAST AREA ══ -->
+  <div class="toast-area" id="toastArea"></div>
+
+  <!-- ══ BOOTH MODAL ══ -->
+  <div class="modal-overlay" id="boothModal">
+    <div class="modal">
+      <h2>🏪 הזמנה מהדוכן</h2>
+      <div class="modal-group">
+        <label for="bName">שם</label>
+        <input type="text" id="bName" placeholder="שם הלקוח">
+      </div>
+      <div class="modal-group">
+        <label for="bItems">הזמנה</label>
+        <textarea id="bItems" rows="3" placeholder="6 כנפיים, שניצל..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-add-btn" onclick="addBoothOrder()">הוסף הזמנה</button>
+        <button class="modal-cancel-btn" onclick="closeBoothModal()">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="fryer.js"></script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הזמנת עוף 🍗</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Arial Hebrew', Tahoma, Arial, sans-serif;
+      background: linear-gradient(160deg, #fff8f0 0%, #ffefd5 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 48px;
+      color: #2c2c2c;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      font-size: 2.2rem;
+      color: #c0392b;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .page-header p {
+      color: #999;
+      font-size: 1rem;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 22px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.09);
+    }
+
+    .form-group {
+      margin-bottom: 22px;
+    }
+
+    label {
+      display: block;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 7px;
+      font-size: 0.95rem;
+    }
+
+    label .req { color: #e74c3c; }
+
+    input[type="text"],
+    input[type="tel"],
+    input[type="time"],
+    textarea {
+      width: 100%;
+      padding: 12px 15px;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-family: inherit;
+      color: #333;
+      background: #fafafa;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+      direction: rtl;
+    }
+
+    input[type="time"] {
+      direction: ltr;
+      text-align: center;
+      font-size: 1.15rem;
+      letter-spacing: 1px;
+    }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #e67e22;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(230,126,34,0.12);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    .hint {
+      margin-top: 8px;
+      padding: 9px 12px;
+      background: #fff8f0;
+      border-radius: 10px;
+      border-right: 4px solid #e67e22;
+      font-size: 0.82rem;
+      color: #a0522d;
+      line-height: 1.5;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, #e67e22 0%, #c0392b 100%);
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 6px 20px rgba(192,57,43,0.28);
+      letter-spacing: 0.5px;
+      font-family: inherit;
+    }
+
+    .submit-btn:hover  { opacity: 0.91; transform: translateY(-1px); }
+    .submit-btn:active { transform: translateY(0); opacity: 1; }
+
+    /* ── Confirmation ── */
+    #confirmScreen { display: none; }
+
+    .confirm-inner {
+      text-align: center;
+      padding: 16px 8px 8px;
+    }
+
+    .confirm-emoji {
+      font-size: 5rem;
+      line-height: 1;
+      display: block;
+      margin-bottom: 20px;
+    }
+
+    .confirm-title {
+      font-size: 1.55rem;
+      font-weight: 800;
+      color: #2c3e50;
+      margin-bottom: 18px;
+      line-height: 1.35;
+    }
+
+    .confirm-msg {
+      color: #555;
+      font-size: 1rem;
+      line-height: 1.65;
+      padding: 13px 16px;
+      background: #f0fff4;
+      border-radius: 12px;
+      border-right: 4px solid #27ae60;
+      margin-bottom: 28px;
+      font-weight: 500;
+    }
+
+    .new-order-btn {
+      padding: 13px 36px;
+      background: #e67e22;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .new-order-btn:hover { background: #d35400; }
+  </style>
+</head>
+<body>
+
+  <!-- ══ FORM SCREEN ══ -->
+  <div id="formScreen">
+    <div class="page-header">
+      <h1>🍗 הזמנת עוף</h1>
+      <p>מלאו את הפרטים ונתחיל לטגן!</p>
+    </div>
+
+    <div class="card">
+      <div class="form-group">
+        <label for="name">שם מלא <span class="req">*</span></label>
+        <input type="text" id="name" placeholder="הכניסו שם פרטי ומשפחה" autocomplete="name">
+      </div>
+
+      <div class="form-group">
+        <label for="phone">מספר טלפון <span class="req">*</span></label>
+        <input type="tel" id="phone" placeholder="050-0000000" autocomplete="tel">
+      </div>
+
+      <div class="form-group">
+        <label for="items">מה תרצו להזמין? <span class="req">*</span></label>
+        <textarea id="items" placeholder="לדוגמה: 6 כנפיים, 2 שניצלים..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="pickupTime">זמן איסוף משוער</label>
+        <input type="time" id="pickupTime">
+        <p class="hint">זמן האיסוף משוער — נשלח לך הודעה כשההזמנה מוכנה לאיסוף 🍗</p>
+      </div>
+
+      <button class="submit-btn" onclick="submitOrder()">שלח הזמנה ←</button>
+    </div>
+  </div>
+
+  <!-- ══ CONFIRMATION SCREEN ══ -->
+  <div id="confirmScreen">
+    <div class="page-header">
+      <h1>🍗 הזמנת עוף</h1>
+    </div>
+    <div class="card">
+      <div class="confirm-inner">
+        <span class="confirm-emoji">🎉</span>
+        <div class="confirm-title">תודה! קיבלנו את הזמנתך 🎉</div>
+        <div class="confirm-msg">נודיע לך בהודעה כשמוכן לאיסוף</div>
+        <button class="new-order-btn" onclick="resetForm()">הזמנה נוספת</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="form.js"></script>
+</body>
+</html>

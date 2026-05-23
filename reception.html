@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>קבלה 🍗</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Arial Hebrew', Tahoma, Arial, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      color: #2c2c2c;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: #2c3e50;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .topbar h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #f0a500;
+    }
+
+    .clock {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #aab;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Alert banner ── */
+    #alertBanner {
+      display: none;
+    }
+
+    .alert-item {
+      background: linear-gradient(135deg, #c0392b, #e74c3c);
+      color: #fff;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border-bottom: 2px solid #922b21;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+      50%       { background: linear-gradient(135deg, #e74c3c, #f1948a); }
+    }
+
+    .alert-icon { font-size: 1.4rem; flex-shrink: 0; }
+    .alert-text { flex: 1; }
+
+    /* ── Orders list ── */
+    .orders-container {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #999;
+      padding: 0 4px;
+      margin-bottom: -4px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #bbb;
+    }
+    .empty-state .emoji { font-size: 3.5rem; margin-bottom: 10px; }
+    .empty-state p { font-size: 1.05rem; }
+
+    /* ── Order card ── */
+    .order-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 18px 18px 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      border-right: 5px solid #bdc3c7;
+      transition: box-shadow 0.2s;
+    }
+    .order-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+
+    .order-card.source-form  { border-color: #3498db; }
+    .order-card.source-booth { border-color: #e67e22; }
+    .order-card.alert-soon   { border-color: #c0392b; box-shadow: 0 4px 20px rgba(192,57,43,0.2); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .order-name {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #2c2c2c;
+    }
+
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .badge-form  { background: #ebf5fb; color: #2471a3; }
+    .badge-booth { background: #fef9e7; color: #b7770d; }
+
+    .order-items {
+      font-size: 0.95rem;
+      color: #555;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .order-meta {
+      font-size: 0.82rem;
+      color: #999;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .pickup-time {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #c0392b;
+    }
+
+    .phone-text {
+      color: #7f8c8d;
+    }
+
+    /* ── Buttons ── */
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ready-btn {
+      background: linear-gradient(135deg, #27ae60, #1e8449);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+    .ready-btn:hover  { opacity: 0.88; transform: translateY(-1px); }
+    .ready-btn:active { transform: translateY(0); }
+
+    .whatsapp-btn {
+      background: #25d366;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .whatsapp-btn:hover { background: #1ebe5d; }
+
+    /* ── Ready orders panel ── */
+    .ready-card {
+      opacity: 0.45;
+      border-color: #bdc3c7 !important;
+    }
+    .ready-label {
+      font-size: 0.78rem;
+      color: #27ae60;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ TOP BAR ══ -->
+  <div class="topbar">
+    <h1>🍗 קבלה</h1>
+    <span class="clock" id="clock">00:00</span>
+  </div>
+
+  <!-- ══ ALERT BANNER ══ -->
+  <div id="alertBanner"></div>
+
+  <!-- ══ ORDERS ══ -->
+  <div class="orders-container" id="ordersContainer">
+    <div class="empty-state">
+      <div class="emoji">🍗</div>
+      <p>אין הזמנות פעילות</p>
+    </div>
+  </div>
+
+  <script src="reception.js"></script>
+</body>
+</html>
