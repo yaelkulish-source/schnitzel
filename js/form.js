@@ -2,22 +2,8 @@
 // Goal: fill and submit in under 30 seconds.
 // Active only on Tuesdays 18:00–20:30. Add ?preview=1 to bypass for testing.
 
-// ─── pickup time options ──────────────────────────────────────────────────────
-
-const PICKUP_TIMES = (() => {
-  const times = [];
-  for (let h = 12; h <= 14; h++) {
-    for (let m = 0; m < 60; m += 15) {
-      if (h === 14 && m > 0) break;
-      times.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-    }
-  }
-  return times; // 12:00 … 14:00
-})();
-
 // ─── state ────────────────────────────────────────────────────────────────────
 
-let selectedPickup  = null;
 let boothOpen       = false;
 let formInitialized = false;
 let boothOpenedAt   = null;
@@ -47,7 +33,6 @@ function applyBoothState() {
     if (!boothOpenedAt) boothOpenedAt = new Date();
     closedEl.classList.add('hidden');
     if (!formInitialized) {
-      renderPickupGrid();
       renderMenuGrids();
       document.getElementById('f-name').addEventListener('input', refreshSubmit);
       document.getElementById('f-phone').addEventListener('input', () => {
@@ -62,7 +47,7 @@ function applyBoothState() {
     const msgEl = document.getElementById('booth-hours-msg');
     if (msgEl) {
       msgEl.textContent = boothOpenedAt
-        ? `היה פתוח היום מ-${formatHHMM(boothOpenedAt)} עד ${formatHHMM(new Date())}`
+        ? `היה פתוח היום מ-${18:00} עד ${20:30}`
         : 'הדוכן יפתח בקרוב — עדכון יישלח בוואטסאפ';
     }
     closedEl.classList.remove('hidden');
@@ -96,23 +81,6 @@ function refreshSubmit() {
   const name     = document.getElementById('f-name').value.trim();
   const hasItems = cartQty.size > 0;
   document.getElementById('submit-btn').disabled = !name || !hasItems;
-}
-
-// ─── pickup time grid ─────────────────────────────────────────────────────────
-
-function renderPickupGrid() {
-  document.getElementById('pickup-grid').innerHTML = PICKUP_TIMES.map(t => `
-    <button type="button" class="pickup-btn" data-time="${t}" onclick="selectPickup('${t}')">
-      ${t}
-    </button>`).join('');
-}
-
-function selectPickup(time) {
-  selectedPickup = time;
-  document.querySelectorAll('.pickup-btn').forEach(b =>
-    b.classList.toggle('selected', b.dataset.time === time));
-  clearFieldError('pickup-grid', 'err-pickup');
-  refreshSubmit();
 }
 
 // ─── menu grid ────────────────────────────────────────────────────────────────
@@ -268,11 +236,8 @@ function buildSpreadsSection(itemId, qty) {
 
 function clearFieldErrors() {
   document.getElementById('f-phone')?.classList.remove('field-error-input');
-  document.getElementById('pickup-grid')?.classList.remove('field-error');
-  ['err-phone', 'err-pickup'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
+  const errPhone = document.getElementById('err-phone');
+  if (errPhone) errPhone.style.display = 'none';
 }
 
 function clearFieldError(inputId, msgId) {
@@ -309,10 +274,6 @@ async function handleSubmit(e) {
     showFieldError('f-phone', 'err-phone', 'יש להזין מספר טלפון תקין');
     firstErrorId ??= 'f-phone';
   }
-  if (!selectedPickup) {
-    showFieldError('pickup-grid', 'err-pickup', 'יש לבחור שעת איסוף');
-    firstErrorId ??= 'pickup-section';
-  }
   if (firstErrorId) {
     document.getElementById(firstErrorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
@@ -325,8 +286,7 @@ async function handleSubmit(e) {
   try {
     const order = await api.post('/api/orders', {
       name, phone,
-      source:      'whatsapp_form',
-      pickup_time: selectedPickup,
+      source: 'whatsapp_form',
       items,
       total,
       note,
@@ -343,9 +303,8 @@ async function handleSubmit(e) {
 
 function showConfirmation(order) {
   document.getElementById('order-form').classList.add('hidden');
-  document.getElementById('conf-num').textContent    = `#${order.id}`;
-  document.getElementById('conf-total').textContent  = `${order.total}₪`;
-  document.getElementById('conf-pickup').textContent = order.pickup_time;
+  document.getElementById('conf-num').textContent   = `#${order.id}`;
+  document.getElementById('conf-total').textContent = `${order.total}₪`;
   document.getElementById('confirm-state').classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
