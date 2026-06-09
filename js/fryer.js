@@ -15,12 +15,30 @@ const DRINK_NAMES = new Set(MENU.drinks.map(d => d.name));
 
 // ─── derived data ─────────────────────────────────────────────────────────────
 
-// Orders the fryer cares about: waiting or cooking, with at least one food item
+function isUpcoming(order) {
+  if (order.source !== 'whatsapp_form') return false;
+  const mins = minutesUntil(order.pickup_time);
+  return mins !== null && mins > 10;
+}
+
+// Orders the fryer cares about NOW: waiting/cooking, not upcoming, with at least one food item
 function activeOrders() {
   return state.orders.filter(o =>
     (o.status === 'waiting' || o.status === 'cooking') &&
+    !isUpcoming(o) &&
     o.items.some(item => !DRINK_NAMES.has(item.menu_item))
   );
+}
+
+// Scheduled form orders more than 10 min away
+function upcomingOrders() {
+  return state.orders
+    .filter(o =>
+      isUpcoming(o) &&
+      o.status !== 'done' && o.status !== 'cancelled' &&
+      o.items.some(item => !DRINK_NAMES.has(item.menu_item))
+    )
+    .sort((a, b) => (a.pickup_time || '').localeCompare(b.pickup_time || ''));
 }
 
 // Sum food items across all active orders, preserving menu display order
@@ -85,6 +103,7 @@ function renderAll() {
   renderBackground();
   renderAggregate();
   renderCards();
+  renderUpcoming();
   renderUrgentBar();
 }
 
@@ -175,6 +194,33 @@ function buildCard(order) {
     </div>`;
 }
 
+function renderUpcoming() {
+  const section = document.getElementById('upcoming-section');
+  const cards   = document.getElementById('upcoming-cards');
+  if (!section || !cards) return;
+  const orders  = upcomingOrders();
+  section.style.display = orders.length ? '' : 'none';
+  cards.innerHTML = orders.map(buildUpcomingCard).join('');
+}
+
+function buildUpcomingCard(order) {
+  const mins      = minutesUntil(order.pickup_time);
+  const foodItems = order.items.filter(item => !DRINK_NAMES.has(item.menu_item));
+  const itemsHtml = foodItems.map(item =>
+    `<div>${item.quantity > 1 ? `<span class="card-item-qty">${item.quantity}×</span> ` : ''}${esc(item.menu_item)}</div>`
+  ).join('');
+  return `
+    <div class="fryer-card upcoming-fryer-card" id="fcard-${order.id}">
+      <div class="card-top">
+        <span class="card-num">#${order.id}</span>
+        <span class="card-name">${esc(order.name)}</span>
+        <span class="status-badge badge-waiting">ממתין</span>
+      </div>
+      <div class="card-items">${itemsHtml}</div>
+      <div class="card-pickup">🕐 ${order.pickup_time}<span id="ftimer-${order.id}" class="card-timer"> ${formatCountdown(mins)}</span></div>
+    </div>`;
+}
+
 function renderUrgentBar() {
   const urgent = urgentOrders();
   const bar    = document.getElementById('urgent-bar');
@@ -195,8 +241,9 @@ function renderUrgentBar() {
 
 // ─── timer tick (every 1s) ────────────────────────────────────────────────────
 
-// Tracks previous urgency to detect threshold crossings without full re-renders
-const prevUrgent = new Map();
+// Track urgency and upcoming transitions for in-place updates and threshold detection
+const prevUrgent   = new Map();
+const prevUpcoming = new Map();
 
 function tickTimers() {
   // Update clock
@@ -207,14 +254,21 @@ function tickTimers() {
 
   let needRerender = false;
 
-  for (const o of activeOrders()) {
-    if (!o.pickup_time) continue;
+  for (const o of state.orders) {
+    if (!o.pickup_time || o.status === 'done' || o.status === 'cancelled') continue;
 
-    const mins      = minutesUntil(o.pickup_time);
-    const isNowUrg  = mins !== null && mins <= 10;
+    const mins     = minutesUntil(o.pickup_time);
+    const isNowUrg = mins !== null && mins <= 10;
 
     if (prevUrgent.get(o.id) !== isNowUrg) {
       prevUrgent.set(o.id, isNowUrg);
+      needRerender = true;
+    }
+
+    // Detect upcoming → active transition
+    const nowUpcoming = isUpcoming(o);
+    if (prevUpcoming.get(o.id) !== nowUpcoming) {
+      prevUpcoming.set(o.id, nowUpcoming);
       needRerender = true;
     }
 
@@ -286,6 +340,13 @@ async function init() {
     if (i >= 0) state.orders[i] = order; else state.orders.push(order);
     localDB.put(order);
     renderAll();
+  });
+
+  ws.on('demo:ended', ({ ids }) => {
+    if (ids?.length) {
+      state.orders = state.orders.filter(o => !ids.includes(o.id));
+      renderAll();
+    }
   });
 
   ws.on('_connected',    () => setConnected(true));

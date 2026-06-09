@@ -152,6 +152,7 @@
     .ready-btn:disabled { background: #9ca3af; cursor: not-allowed; }
 
     .cards-empty { font-size: 1.6rem; color: #6b7280; text-align: center; padding: 24px; }
+    .upcoming-fryer-card { border-style: dashed !important; }
 
     /* ─── urgent bar (bottom) ────────────────────────────────────────────── */
     #urgent-bar {
@@ -192,6 +193,12 @@
   <div id="orders-section">
     <!-- filled by renderCards() -->
   </div>
+
+  <!-- Upcoming: scheduled form orders more than 10 min away -->
+  <section id="upcoming-section" style="display:none">
+    <div class="section-title" style="opacity:.6">📅 ממתינות — עוד 10+ דקות</div>
+    <div id="upcoming-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;opacity:.55"></div>
+  </section>
 
 </main>
 

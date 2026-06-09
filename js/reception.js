@@ -15,8 +15,10 @@ const state = {
 
 let pendingCollectId = null;
 
-const cartQty    = new Map();
-const prevUrgent = new Map();
+const cartQty      = new Map();
+const prevUrgent   = new Map();
+const prevUpcoming = new Map();
+const scheduledAlerts = new Set(); // order IDs with active alerts
 
 // ─── pure helpers ─────────────────────────────────────────────────────────────
 
@@ -51,6 +53,12 @@ function formatDateHe(dateStr) {
   return new Intl.DateTimeFormat('he-IL', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   }).format(new Date(dateStr + 'T12:00:00'));
+}
+
+function isUpcoming(order) {
+  if (order.source !== 'whatsapp_form') return false;
+  const mins = minutesUntil(order.pickup_time);
+  return mins !== null && mins > 10;
 }
 
 const STATUS_LABEL = { cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף' };
@@ -188,15 +196,8 @@ async function submitOrder() {
   btn.disabled = true;
   btn.textContent = 'שולח…';
 
-  if (state.demoMode) {
-    await new Promise(r => setTimeout(r, 350));
-    cartReset();
-    btn.textContent = '➕ הוסף הזמנה';
-    return;
-  }
-
   try {
-    await api.post('/api/orders', { name, note, items, total, source: 'walk_in' });
+    await api.post('/api/orders', { name, note, items, total, source: 'walk_in', demo: state.demoMode || undefined });
     cartReset();
     // Card appears via the WebSocket order:created broadcast.
   } catch (e) {
@@ -303,6 +304,7 @@ async function toggleBooth() {
     state.boothOpen = false;
     renderBoothToggle();
     renderDemoBanner();
+    api.post('/api/demo/close', {}).catch(() => {});
   } else if (state.boothOpen) {
     try {
       await api.patch('/api/booth', { open: false });
@@ -326,6 +328,7 @@ function openBoothDemo() {
   state.boothOpen = true;
   renderBoothToggle();
   renderDemoBanner();
+  api.post('/api/demo/open', {}).catch(() => {});
 }
 
 function showBoothHoursForm() {
@@ -380,9 +383,15 @@ function renderBoothToggle() {
 
 // ─── sorting ──────────────────────────────────────────────────────────────────
 
+function sortedUpcoming() {
+  return state.orders
+    .filter(o => isUpcoming(o) && o.status !== 'done' && o.status !== 'cancelled')
+    .sort((a, b) => (a.pickup_time || '').localeCompare(b.pickup_time || ''));
+}
+
 function sortedActive() {
   return state.orders
-    .filter(o => o.status !== 'done' && o.status !== 'cancelled')
+    .filter(o => o.status !== 'done' && o.status !== 'cancelled' && !isUpcoming(o))
     .sort((a, b) => {
       const mA = minutesUntil(a.pickup_time);
       const mB = minutesUntil(b.pickup_time);
@@ -407,7 +416,10 @@ function sortedActive() {
 
 function renderAll() {
   renderStats();
-  if (state.tab === 'active')    renderOrderGrid('orders-list',    sortedActive(), 'active');
+  if (state.tab === 'active') {
+    renderOrderGrid('orders-list', sortedActive(), 'active');
+    renderUpcomingSection();
+  }
   if (state.tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), 'completed');
   updateCompletedBadge();
 }
@@ -568,6 +580,59 @@ function updateCompletedBadge() {
   if (el) el.textContent = n > 0 ? `(${n})` : '';
 }
 
+// ─── upcoming orders section ──────────────────────────────────────────────────
+
+function renderUpcomingSection() {
+  const section = document.getElementById('upcoming-section');
+  const list    = document.getElementById('upcoming-list');
+  if (!section || !list) return;
+  const orders  = sortedUpcoming();
+  section.classList.toggle('hidden', orders.length === 0);
+  list.innerHTML = orders.map(buildUpcomingCard).join('');
+}
+
+function buildUpcomingCard(order) {
+  const mins     = minutesUntil(order.pickup_time);
+  const itemsHtml = order.items.map(item =>
+    `<div class="card-item">${item.quantity}× ${esc(item.menu_item)}</div>`
+  ).join('');
+  return `
+    <div class="order-card upcoming-card" id="card-${order.id}">
+      <div class="card-header">
+        <span class="order-num">#${order.id}</span>
+        <span class="order-name">${esc(order.name)}</span>
+        <span class="order-source wa">ווצאפ</span>
+        <span class="upcoming-badge">📅 ${order.pickup_time}</span>
+      </div>
+      <div class="card-items">${itemsHtml}</div>
+      <div class="card-meta">
+        <span class="meta-total">${order.total}₪</span>
+        <span id="timer-${order.id}" class="meta-timer">${formatCountdown(mins)}</span>
+        ${order.note ? `<span class="meta-note">💬 ${esc(order.note)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+// ─── scheduled alerts ─────────────────────────────────────────────────────────
+
+function showScheduledAlert(order) {
+  if (scheduledAlerts.has(order.id)) return;
+  scheduledAlerts.add(order.id);
+  const container = document.getElementById('scheduled-alerts');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'scheduled-alert';
+  el.id        = `salert-${order.id}`;
+  el.innerHTML = `<span>🔔 <strong>התחילו להכין!</strong> ${esc(order.name)} — איסוף ב-${order.pickup_time}</span><button class="salert-close" onclick="dismissAlert(${order.id})">✕</button>`;
+  container.appendChild(el);
+  setTimeout(() => dismissAlert(order.id), 30000);
+}
+
+function dismissAlert(orderId) {
+  scheduledAlerts.delete(orderId);
+  document.getElementById(`salert-${orderId}`)?.remove();
+}
+
 // ─── timer tick (every 1s) ────────────────────────────────────────────────────
 
 function tickTimers() {
@@ -585,6 +650,15 @@ function tickTimers() {
       needRerender = true;
     }
 
+    // Detect upcoming → active transition (10-min threshold crossing)
+    const wasUpcoming = prevUpcoming.get(order.id);
+    const nowUpcoming = isUpcoming(order);
+    if (wasUpcoming === true && !nowUpcoming) {
+      showScheduledAlert(order);
+      needRerender = true;
+    }
+    if (wasUpcoming !== nowUpcoming) prevUpcoming.set(order.id, nowUpcoming);
+
     const timerEl = document.getElementById(`timer-${order.id}`);
     if (timerEl) {
       timerEl.textContent = formatCountdown(mins);
@@ -597,6 +671,7 @@ function tickTimers() {
 
   if (needRerender && state.tab === 'active') {
     renderOrderGrid('orders-list', sortedActive(), 'active');
+    renderUpcomingSection();
   }
 }
 
@@ -809,6 +884,13 @@ async function init() {
   ws.on('orders:cleared', ({ date }) => {
     if (date === TODAY) {
       state.orders = state.orders.filter(o => o.status !== 'done');
+      renderAll();
+    }
+  });
+
+  ws.on('demo:ended', ({ ids }) => {
+    if (ids?.length) {
+      state.orders = state.orders.filter(o => !ids.includes(o.id));
       renderAll();
     }
   });
