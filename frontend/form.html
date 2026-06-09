@@ -74,6 +74,21 @@
     }
     .required-star { color: #dc2626; margin-right: 2px; }
 
+    select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-family: inherit;
+      direction: rtl;
+      background: var(--surface);
+      color: var(--text);
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    select:focus { outline: none; border-color: var(--green); }
+
     input[type=text], input[type=tel], textarea {
       width: 100%;
       padding: 12px 14px;
@@ -325,6 +340,10 @@
     <div id="cart-section">
       <label class="field-label">הסל שלך</label>
       <div id="cart-items"></div>
+    </div>
+
+    <div id="pickup-time-field">
+      <!-- populated by renderPickupTimeField() — shows dropdown or time input -->
     </div>
 
     <div><!-- notes -->

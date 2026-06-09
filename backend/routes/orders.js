@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const demoStore = require('../demo');
 
 // GET /api/orders?date=YYYY-MM-DD  (defaults to today)
 router.get('/', async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
-  res.json(await db.getOrdersByDate(date));
+  const real  = await db.getOrdersByDate(date);
+  const demo  = demoStore.getDemoOrders(date);
+  res.json([...real, ...demo]);
 });
 
 // GET /api/orders/summary?date=YYYY-MM-DD  — must be before /:id
@@ -21,7 +24,7 @@ router.get('/dates', async (_req, res) => {
 
 // POST /api/orders — create a new order (walk-in or whatsapp form)
 router.post('/', async (req, res) => {
-  const { name, phone, source, pickup_time, items, total, note, payment_method, paid } = req.body;
+  const { name, phone, source, pickup_time, items, total, note, payment_method, paid, demo } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'שם הוא שדה חובה' });
@@ -31,6 +34,12 @@ router.post('/', async (req, res) => {
   }
   if (total == null || typeof total !== 'number' || total < 0) {
     return res.status(400).json({ error: 'סכום לא תקין' });
+  }
+
+  if (demo) {
+    const order = demoStore.createDemoOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid });
+    req.broadcast({ type: 'order:created', payload: order });
+    return res.status(201).json(order);
   }
 
   const order = await db.createOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid });
@@ -50,7 +59,9 @@ router.delete('/completed', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
-  await db.deleteOrder(id);
+  if (!demoStore.getDemoOrderById(id)) {
+    await db.deleteOrder(id);
+  }
   req.broadcast({ type: 'order:deleted', payload: { id } });
   res.json({ ok: true });
 });
@@ -59,6 +70,13 @@ router.delete('/:id', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
+
+  const demoOrder = demoStore.getDemoOrderById(id);
+  if (demoOrder) {
+    const order = demoStore.updateDemoOrder(id, req.body);
+    req.broadcast({ type: 'order:updated', payload: order });
+    return res.json(order);
+  }
 
   const existing = await db.getOrderById(id);
   if (!existing) return res.status(404).json({ error: 'הזמנה לא נמצאה' });

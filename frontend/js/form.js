@@ -43,6 +43,7 @@ function applyBoothState() {
       document.getElementById('order-form').addEventListener('submit', handleSubmit);
       formInitialized = true;
     }
+    renderPickupTimeField();
     formEl.classList.remove('hidden');
   } else {
     const msgEl = document.getElementById('booth-hours-msg');
@@ -85,7 +86,49 @@ function buildItemsArray() {
 function refreshSubmit() {
   const name     = document.getElementById('f-name').value.trim();
   const hasItems = cartQty.size > 0;
-  document.getElementById('submit-btn').disabled = !name || !hasItems;
+  // Pickup is required only when the dropdown is shown (hours are configured)
+  let hasPickup = true;
+  if (boothHours.open_time && boothHours.close_time) {
+    const pickup = document.getElementById('f-pickup');
+    hasPickup = !!pickup?.value;
+  }
+  document.getElementById('submit-btn').disabled = !name || !hasItems || !hasPickup;
+}
+
+// ─── pickup time ─────────────────────────────────────────────────────────────
+
+function generateTimeSlots(startStr, endStr, intervalMin) {
+  const slots = [];
+  const [sh, sm] = startStr.split(':').map(Number);
+  const [eh, em] = endStr.split(':').map(Number);
+  let total    = sh * 60 + sm;
+  const endTot = eh * 60 + em;
+  while (total <= endTot) {
+    slots.push(`${String(Math.floor(total / 60)).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`);
+    total += intervalMin;
+  }
+  return slots;
+}
+
+function renderPickupTimeField() {
+  const container = document.getElementById('pickup-time-field');
+  if (!container) return;
+
+  if (boothHours.open_time && boothHours.close_time) {
+    const slots = generateTimeSlots(boothHours.open_time, boothHours.close_time, 15);
+    container.innerHTML = `
+      <label class="field-label" for="f-pickup">שעת איסוף <span class="required-star">*</span></label>
+      <select id="f-pickup">
+        <option value="">— בחר שעת איסוף —</option>
+        ${slots.map(t => `<option value="${t}">${t}</option>`).join('')}
+      </select>`;
+  } else {
+    container.innerHTML = `
+      <label class="field-label" for="f-pickup">שעת איסוף</label>
+      <input type="time" id="f-pickup">`;
+  }
+  document.getElementById('f-pickup')?.addEventListener('change', refreshSubmit);
+  document.getElementById('f-pickup')?.addEventListener('input',  refreshSubmit);
 }
 
 // ─── menu grid ────────────────────────────────────────────────────────────────
@@ -265,11 +308,12 @@ async function handleSubmit(e) {
   e.preventDefault();
   clearFieldErrors();
 
-  const name  = document.getElementById('f-name').value.trim();
-  const phone = document.getElementById('f-phone').value.trim();
-  const note  = document.getElementById('f-note').value.trim();
-  const items = buildItemsArray();
-  const total = calcTotal();
+  const name        = document.getElementById('f-name').value.trim();
+  const phone       = document.getElementById('f-phone').value.trim();
+  const note        = document.getElementById('f-note').value.trim();
+  const pickup_time = document.getElementById('f-pickup')?.value || null;
+  const items       = buildItemsArray();
+  const total       = calcTotal();
 
   if (!name || !items.length) return;
 
@@ -295,6 +339,7 @@ async function handleSubmit(e) {
       items,
       total,
       note,
+      pickup_time,
     });
     showConfirmation(order);
   } catch (err) {

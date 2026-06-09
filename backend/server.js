@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const cors = require('cors');
 const ordersRouter = require('./routes/orders');
 const db = require('./db');
+const demoStore = require('./demo');
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +44,21 @@ app.patch('/api/booth', async (req, res) => {
   const booth = await db.getBooth();
   broadcast({ type: 'booth:updated', payload: booth });
   res.json(booth);
+});
+
+// ─── demo mode endpoints ──────────────────────────────────────────────────────
+
+app.post('/api/demo/open', (req, res) => {
+  broadcast({ type: 'booth:updated', payload: { open: true } });
+  res.json({ ok: true });
+});
+
+app.post('/api/demo/close', (req, res) => {
+  const ids = demoStore.getAllDemoIds();
+  demoStore.clear();
+  broadcast({ type: 'demo:ended', payload: { ids } });
+  broadcast({ type: 'booth:updated', payload: { open: false } });
+  res.json({ ok: true });
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, clients: wss.clients.size }));
