@@ -7,6 +7,7 @@
 let boothOpen       = false;
 let formInitialized = false;
 let boothOpenedAt   = null;
+let boothHours      = { open_time: null, close_time: null };
 
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
@@ -46,9 +47,13 @@ function applyBoothState() {
   } else {
     const msgEl = document.getElementById('booth-hours-msg');
     if (msgEl) {
-      msgEl.textContent = boothOpenedAt
-        ? `היה פתוח היום מ-${18:00} עד ${20:30}`
-        : 'הדוכן יפתח בקרוב — עדכון יישלח בוואטסאפ';
+      if (boothOpenedAt && boothHours.open_time && boothHours.close_time) {
+        msgEl.textContent = `היה פתוח היום מ-${boothHours.open_time} עד ${boothHours.close_time}`;
+      } else if (boothHours.open_time) {
+        msgEl.textContent = `הדוכן יפתח בשעה ${boothHours.open_time} — עדכון יישלח בוואטסאפ`;
+      } else {
+        msgEl.textContent = 'הדוכן יפתח בקרוב — עדכון יישלח בוואטסאפ';
+      }
     }
     closedEl.classList.remove('hidden');
     formEl.classList.add('hidden');
@@ -322,7 +327,8 @@ async function init() {
 
   try {
     const booth = await api.get('/api/booth');
-    boothOpen = booth.open;
+    boothOpen  = booth.open;
+    boothHours = { open_time: booth.open_time || null, close_time: booth.close_time || null };
   } catch {
     boothOpen = false;
   }
@@ -330,8 +336,9 @@ async function init() {
   applyBoothState();
 
   // Listen for real-time booth open/close from reception screen
-  ws.on('booth:updated', ({ open }) => {
-    boothOpen = open;
+  ws.on('booth:updated', (booth) => {
+    boothOpen  = booth.open;
+    boothHours = { open_time: booth.open_time || null, close_time: booth.close_time || null };
     applyBoothState();
   });
   ws.connect();

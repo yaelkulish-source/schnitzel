@@ -10,6 +10,7 @@ const state = {
   historyDates: [],
   historyDate:  null,
   boothOpen:    false,
+  demoMode:     false,
 };
 
 let pendingCollectId = null;
@@ -187,6 +188,13 @@ async function submitOrder() {
   btn.disabled = true;
   btn.textContent = 'שולח…';
 
+  if (state.demoMode) {
+    await new Promise(r => setTimeout(r, 350));
+    cartReset();
+    btn.textContent = '➕ הוסף הזמנה';
+    return;
+  }
+
   try {
     await api.post('/api/orders', { name, note, items, total, source: 'walk_in' });
     cartReset();
@@ -290,21 +298,83 @@ async function collectWithPayment(method) {
 // ─── booth toggle ─────────────────────────────────────────────────────────────
 
 async function toggleBooth() {
+  if (state.demoMode) {
+    state.demoMode  = false;
+    state.boothOpen = false;
+    renderBoothToggle();
+    renderDemoBanner();
+  } else if (state.boothOpen) {
+    try {
+      await api.patch('/api/booth', { open: false });
+    } catch { alert('שגיאה בעדכון מצב הדוכן'); }
+  } else {
+    showBoothOpenModal();
+  }
+}
+
+function showBoothOpenModal() {
+  document.getElementById('booth-open-modal').classList.remove('hidden');
+}
+
+function closeBoothOpenModal() {
+  document.getElementById('booth-open-modal').classList.add('hidden');
+}
+
+function openBoothDemo() {
+  closeBoothOpenModal();
+  state.demoMode  = true;
+  state.boothOpen = true;
+  renderBoothToggle();
+  renderDemoBanner();
+}
+
+function showBoothHoursForm() {
+  closeBoothOpenModal();
+  document.getElementById('booth-hours-modal').classList.remove('hidden');
+}
+
+function closeBoothHoursModal() {
+  document.getElementById('booth-hours-modal').classList.add('hidden');
+}
+
+async function openBoothReal() {
+  const openTime  = document.getElementById('booth-open-time').value  || null;
+  const closeTime = document.getElementById('booth-close-time').value || null;
+  closeBoothHoursModal();
   try {
-    await api.patch('/api/booth', { open: !state.boothOpen });
-    // state.boothOpen updated via WS booth:updated broadcast
-  } catch { alert('שגיאה בעדכון מצב הדוכן'); }
+    await api.patch('/api/booth', { open: true, open_time: openTime, close_time: closeTime });
+  } catch { alert('שגיאה בפתיחת הדוכן'); }
+}
+
+function renderDemoBanner() {
+  let banner = document.getElementById('demo-banner');
+  if (state.demoMode) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id          = 'demo-banner';
+      banner.className   = 'demo-banner';
+      banner.textContent = '🧪 מצב דמו — הזמנות לא נשמרות במסד הנתונים';
+      const toolbar = document.getElementById('toolbar');
+      toolbar.insertAdjacentElement('afterend', banner);
+    }
+    banner.style.display = '';
+  } else if (banner) {
+    banner.style.display = 'none';
+  }
 }
 
 function renderBoothToggle() {
   const btn = document.getElementById('booth-toggle-btn');
   if (!btn) return;
-  if (state.boothOpen) {
+  if (state.demoMode) {
+    btn.textContent = '🧪 מצב דמו';
+    btn.className   = 'btn booth-toggle booth-demo';
+  } else if (state.boothOpen) {
     btn.textContent = '🟢 דוכן פתוח';
-    btn.className = 'btn booth-toggle booth-open';
+    btn.className   = 'btn booth-toggle booth-open';
   } else {
     btn.textContent = '🔴 דוכן סגור';
-    btn.className = 'btn booth-toggle booth-closed';
+    btn.className   = 'btn booth-toggle booth-closed';
   }
 }
 
@@ -744,8 +814,10 @@ async function init() {
   });
 
   ws.on('booth:updated', ({ open }) => {
-    state.boothOpen = open;
-    renderBoothToggle();
+    if (!state.demoMode) {
+      state.boothOpen = open;
+      renderBoothToggle();
+    }
   });
 
   ws.on('_connected',    () => setConnected(true));

@@ -607,6 +607,47 @@ body {
 }
 .booth-toggle.booth-open   { background: var(--success-light); color: var(--success); border-color: var(--success); }
 .booth-toggle.booth-closed { background: var(--danger-light);  color: var(--danger);  border-color: var(--danger); }
+.booth-toggle.booth-demo   { background: #fef9c3; color: #854d0e; border-color: #ca8a04; }
+
+/* ─── demo banner ────────────────────────────────────────────────────────────── */
+.demo-banner {
+  background: #ca8a04;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: center;
+  padding: 8px 16px;
+  letter-spacing: .04em;
+}
+
+/* ─── booth open modal options ───────────────────────────────────────────────── */
+.booth-open-options {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.booth-open-opt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .12s, background .12s;
+}
+.booth-open-opt:active { opacity: .85; }
+.booth-open-opt.demo-opt:hover { border-color: #ca8a04; background: #fef9c3; }
+.booth-open-opt.real-opt:hover { border-color: var(--success); background: var(--success-light); }
+
+.opt-icon  { font-size: 2rem; }
+.opt-title { font-size: 1rem; font-weight: 800; }
+.opt-desc  { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
 
 /* ─── payment modal ──────────────────────────────────────────────────────────── */
 #payment-modal {
