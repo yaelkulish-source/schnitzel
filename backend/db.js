@@ -109,11 +109,15 @@ async function getDistinctDates() {
 
 async function getBooth() {
   const doc = await ds.findOneAsync({ _id: '__booth__' });
-  return doc ? doc.open : false;
+  if (!doc) return { open: false, open_time: null, close_time: null };
+  return { open: doc.open, open_time: doc.open_time || null, close_time: doc.close_time || null };
 }
 
-async function setBooth(open) {
-  await ds.updateAsync({ _id: '__booth__' }, { $set: { open } }, { upsert: true });
+async function setBooth({ open, open_time, close_time }) {
+  const $set = { open };
+  if (open_time  !== undefined) $set.open_time  = open_time;
+  if (close_time !== undefined) $set.close_time = close_time;
+  await ds.updateAsync({ _id: '__booth__' }, { $set }, { upsert: true });
 }
 
 async function deleteOrder(id) {

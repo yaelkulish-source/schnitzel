@@ -32,16 +32,17 @@ app.use((req, _res, next) => {
 app.use('/api/orders', ordersRouter);
 
 app.get('/api/booth', async (_req, res) => {
-  const open = await db.getBooth();
-  res.json({ open });
+  const booth = await db.getBooth();
+  res.json(booth);
 });
 
 app.patch('/api/booth', async (req, res) => {
-  const { open } = req.body;
+  const { open, open_time, close_time } = req.body;
   if (typeof open !== 'boolean') return res.status(400).json({ error: 'open must be boolean' });
-  await db.setBooth(open);
-  broadcast({ type: 'booth:updated', payload: { open } });
-  res.json({ open });
+  await db.setBooth({ open, open_time, close_time });
+  const booth = await db.getBooth();
+  broadcast({ type: 'booth:updated', payload: booth });
+  res.json(booth);
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, clients: wss.clients.size }));

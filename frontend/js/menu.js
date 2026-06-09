@@ -10,8 +10,9 @@ const MENU = {
     { id: 'schnitzel_challah_chips', emoji: '🍗🥖🍟', name: "שניצל בחלה + צ'יפס",      price: 40, hasSpreads: true  },
   ],
   drinks: [
-    { id: 'tropical', emoji: '🧃', name: 'טרופית', price: 3, hasSpreads: false },
-    { id: 'can',      emoji: '🥤', name: 'פחית',   price: 8, hasSpreads: false },
+    { id: 'tropical', emoji: '🧃', name: 'טרופית', price: 3,  hasSpreads: false },
+    { id: 'can',      emoji: '🥤', name: 'פחית',   price: 8,  hasSpreads: false },
+    { id: 'beer',     emoji: '🍺', name: 'בירה',   price: 10, hasSpreads: false },
   ],
   spreadsMain:       ['מטבוחה', 'טחינה', 'חצילים', 'כרוב אדום', 'לימון כבוש', 'חריף', 'חסה'],
   spreadsCondiments: ['קטשופ', 'מיונז'],
