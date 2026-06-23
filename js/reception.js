@@ -256,9 +256,17 @@ async function cancelOrder(id, name) {
 
 async function deleteOrder(id, name) {
   if (!confirm(`למחוק את הזמנה #${id} של ${name}?\nפעולה זו אינה הפיכה.`)) return;
+
+  const btn = document.querySelector(`#card-${id} .delete-order-btn`);
+  if (btn) { btn.disabled = true; btn.textContent = 'מוחק…'; }
+
   try {
     await api.delete(`/api/orders/${id}`);
-  } catch { alert('שגיאה במחיקת הזמנה'); }
+    // Card is removed via the WebSocket order:deleted broadcast.
+  } catch (e) {
+    alert('שגיאה במחיקת הזמנה: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🗑 מחק'; }
+  }
 }
 
 async function clearCompleted() {

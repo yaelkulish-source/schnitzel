@@ -6,18 +6,35 @@
 
 const API_BASE = localStorage.getItem('apiBase') || 'https://schnitzel.onrender.com';
 const WS_URL   = API_BASE.replace(/^http/, 'ws');
+const REQUEST_TIMEOUT_MS = 10000;
+
+// Wraps fetch with a hard timeout so callers never hang forever waiting on a
+// slow/unreachable server — important since every request now depends on a
+// remote MongoDB connection instead of a local file.
+async function fetchWithTimeout(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(API_BASE + path, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('השרת לא הגיב בזמן — נסה שוב');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ─── REST ─────────────────────────────────────────────────────────────────────
 
 const api = {
   async get(path) {
-    const res = await fetch(API_BASE + path);
+    const res = await fetchWithTimeout(path);
     if (!res.ok) throw new Error(`GET ${path} → ${res.status}`);
     return res.json();
   },
 
   async post(path, body) {
-    const res = await fetch(API_BASE + path, {
+    const res = await fetchWithTimeout(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -28,7 +45,7 @@ const api = {
   },
 
   async patch(path, body) {
-    const res = await fetch(API_BASE + path, {
+    const res = await fetchWithTimeout(path, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -38,7 +55,7 @@ const api = {
   },
 
   async delete(path) {
-    const res = await fetch(API_BASE + path, { method: 'DELETE' });
+    const res = await fetchWithTimeout(path, { method: 'DELETE' });
     if (!res.ok) throw new Error(`DELETE ${path} → ${res.status}`);
     return res.json();
   },

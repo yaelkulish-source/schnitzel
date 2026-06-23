@@ -8,6 +8,7 @@ let boothOpen       = false;
 let formInitialized = false;
 let boothOpenedAt   = null;
 let boothHours      = { open_time: null, close_time: null };
+let isSubmitting    = false;
 
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
@@ -84,6 +85,9 @@ function buildItemsArray() {
 }
 
 function refreshSubmit() {
+  // Don't let field edits re-enable the button while a submission is in flight.
+  if (isSubmitting) return;
+
   const name     = document.getElementById('f-name').value.trim();
   const hasItems = cartQty.size > 0;
   // Pickup is required only when the dropdown is shown (hours are configured)
@@ -306,6 +310,7 @@ function showFieldError(inputId, msgId, msg) {
 
 async function handleSubmit(e) {
   e.preventDefault();
+  if (isSubmitting) return;
   clearFieldErrors();
 
   const name        = document.getElementById('f-name').value.trim();
@@ -329,6 +334,7 @@ async function handleSubmit(e) {
   }
 
   const btn = document.getElementById('submit-btn');
+  isSubmitting    = true;
   btn.disabled    = true;
   btn.textContent = 'שולח…';
 
@@ -344,6 +350,7 @@ async function handleSubmit(e) {
     showConfirmation(order);
   } catch (err) {
     alert('שגיאה בשליחת ההזמנה:\n' + err.message);
+    isSubmitting    = false;
     btn.disabled    = false;
     btn.textContent = 'שליחת הזמנה';
   }
