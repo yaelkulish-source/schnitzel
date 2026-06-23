@@ -2,28 +2,29 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const demoStore = require('../demo');
+const asyncHandler = require('../asyncHandler');
 
 // GET /api/orders?date=YYYY-MM-DD  (defaults to today)
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const real  = await db.getOrdersByDate(date);
   const demo  = demoStore.getDemoOrders(date);
   res.json([...real, ...demo]);
-});
+}));
 
 // GET /api/orders/summary?date=YYYY-MM-DD  — must be before /:id
-router.get('/summary', async (req, res) => {
+router.get('/summary', asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   res.json(await db.getSummaryByDate(date));
-});
+}));
 
 // GET /api/orders/dates — list all days that have orders
-router.get('/dates', async (_req, res) => {
+router.get('/dates', asyncHandler(async (_req, res) => {
   res.json(await db.getDistinctDates());
-});
+}));
 
 // POST /api/orders — create a new order (walk-in or whatsapp form)
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { name, phone, source, pickup_time, items, total, note, payment_method, paid, demo } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
@@ -45,29 +46,31 @@ router.post('/', async (req, res) => {
   const order = await db.createOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid });
   req.broadcast({ type: 'order:created', payload: order });
   res.status(201).json(order);
-});
+}));
 
 // DELETE /api/orders/completed?date=YYYY-MM-DD — must be before /:id
-router.delete('/completed', async (req, res) => {
+router.delete('/completed', asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   await db.deleteCompletedOrders(date);
   req.broadcast({ type: 'orders:cleared', payload: { date } });
   res.json({ ok: true });
-});
+}));
 
 // DELETE /api/orders/:id — hard delete a single order
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
-  if (!demoStore.getDemoOrderById(id)) {
+  if (demoStore.getDemoOrderById(id)) {
+    demoStore.deleteDemoOrder(id);
+  } else {
     await db.deleteOrder(id);
   }
   req.broadcast({ type: 'order:deleted', payload: { id } });
   res.json({ ok: true });
-});
+}));
 
 // PATCH /api/orders/:id — update status, payment, note, etc.
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
 
@@ -84,6 +87,6 @@ router.patch('/:id', async (req, res) => {
   const order = await db.updateOrder(id, req.body);
   req.broadcast({ type: 'order:updated', payload: order });
   res.json(order);
-});
+}));
 
 module.exports = router;

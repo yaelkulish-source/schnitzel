@@ -6,6 +6,7 @@ const cors = require('cors');
 const ordersRouter = require('./routes/orders');
 const db = require('./db');
 const demoStore = require('./demo');
+const asyncHandler = require('./asyncHandler');
 
 const app = express();
 const server = http.createServer(app);
@@ -33,19 +34,19 @@ app.use((req, _res, next) => {
 
 app.use('/api/orders', ordersRouter);
 
-app.get('/api/booth', async (_req, res) => {
+app.get('/api/booth', asyncHandler(async (_req, res) => {
   const booth = await db.getBooth();
   res.json(booth);
-});
+}));
 
-app.patch('/api/booth', async (req, res) => {
+app.patch('/api/booth', asyncHandler(async (req, res) => {
   const { open, open_time, close_time } = req.body;
   if (typeof open !== 'boolean') return res.status(400).json({ error: 'open must be boolean' });
   await db.setBooth({ open, open_time, close_time });
   const booth = await db.getBooth();
   broadcast({ type: 'booth:updated', payload: booth });
   res.json(booth);
-});
+}));
 
 // ─── demo mode endpoints ──────────────────────────────────────────────────────
 
@@ -63,6 +64,13 @@ app.post('/api/demo/close', (req, res) => {
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, clients: wss.clients.size }));
+
+// Catch-all error handler — without this, a rejected DB call inside an async
+// route would leave the request hanging with no response (the client just waits forever).
+app.use((err, _req, res, _next) => {
+  console.error('Request error:', err);
+  res.status(500).json({ error: 'שגיאת שרת, נסה שוב' });
+});
 
 // ─── websocket ────────────────────────────────────────────────────────────────
 

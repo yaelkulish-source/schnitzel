@@ -724,6 +724,7 @@ body {
 }
 .delete-order-btn:hover,
 .delete-order-btn:active { color: var(--danger); }
+.delete-order-btn:disabled { color: #d1d5db; cursor: not-allowed; text-decoration: none; }
 
 /* ─── clear completed button ─────────────────────────────────────────────────── */
 #clear-completed-btn {

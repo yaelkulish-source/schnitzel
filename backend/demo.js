@@ -50,9 +50,13 @@ function getAllDemoIds() {
   return [...demoOrders.keys()];
 }
 
+function deleteDemoOrder(id) {
+  demoOrders.delete(id);
+}
+
 function clear() {
   demoOrders.clear();
   seq = 9000;
 }
 
-module.exports = { createDemoOrder, updateDemoOrder, getDemoOrders, getDemoOrderById, getAllDemoIds, clear };
+module.exports = { createDemoOrder, updateDemoOrder, getDemoOrders, getDemoOrderById, getAllDemoIds, deleteDemoOrder, clear };
