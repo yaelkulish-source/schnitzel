@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const express = require('express');
 const WebSocket = require('ws');
@@ -85,6 +86,14 @@ wss.on('close', () => clearInterval(heartbeat));
 // ─── start ────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Schnitzel server listening on port ${PORT}`);
-});
+
+db.connect()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Schnitzel server listening on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });

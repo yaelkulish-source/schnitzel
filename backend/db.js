@@ -1,33 +1,45 @@
-const Datastore = require('@seald-io/nedb');
-const path = require('path');
+const { MongoClient } = require('mongodb');
 
-const ds = new Datastore({
-  filename: path.join(__dirname, 'schnitzel.db'),
-  autoload: true,
-});
+const uri = process.env.MONGODB_URI;
+if (!uri) throw new Error('MONGODB_URI environment variable is required');
 
-ds.ensureIndex({ fieldName: 'date' });
-ds.ensureIndex({ fieldName: 'id', sparse: true });
+const client = new MongoClient(uri);
+const dbName = process.env.MONGODB_DB || 'schnitzel';
+
+let orders;
+let counters;
+let booth;
+
+async function connect() {
+  await client.connect();
+  const database = client.db(dbName);
+  orders   = database.collection('orders');
+  counters = database.collection('counters');
+  booth    = database.collection('booth');
+
+  await orders.createIndex({ id: 1 }, { unique: true });
+  await orders.createIndex({ date: 1 });
+}
 
 // ─── counter (sequential numeric order IDs) ───────────────────────────────────
 
 async function nextId() {
-  const result = await ds.updateAsync(
-    { _id: '__counter__' },
+  const result = await counters.findOneAndUpdate(
+    { _id: 'orders' },
     { $inc: { seq: 1 } },
-    { upsert: true, returnUpdatedDocs: true }
+    { upsert: true, returnDocument: 'after' }
   );
-  return result.affectedDocuments.seq;
+  return result.seq;
 }
 
 // ─── queries ──────────────────────────────────────────────────────────────────
 
 async function getOrdersByDate(date) {
-  return ds.findAsync({ date, _id: { $ne: '__counter__' } }).sort({ id: 1 });
+  return orders.find({ date }).sort({ id: 1 }).toArray();
 }
 
 async function getOrderById(id) {
-  return ds.findOneAsync({ id });
+  return orders.findOne({ id });
 }
 
 async function createOrder(data) {
@@ -52,7 +64,7 @@ async function createOrder(data) {
     date:           now.slice(0, 10),
   };
 
-  await ds.insertAsync(order);
+  await orders.insertOne(order);
   return order;
 }
 
@@ -66,17 +78,17 @@ async function updateOrder(id, changes) {
   }
   if (Object.keys($set).length === 0) return getOrderById(id);
 
-  await ds.updateAsync({ id }, { $set });
+  await orders.updateOne({ id }, { $set });
   return getOrderById(id);
 }
 
 async function getSummaryByDate(date) {
-  const orders = await getOrdersByDate(date);
+  const ordersForDate = await getOrdersByDate(date);
 
   const revenue = { total: 0, cash: 0, bit: 0, paybox: 0, pending: 0 };
   const itemCounts = {};
 
-  for (const o of orders) {
+  for (const o of ordersForDate) {
     if (o.status === 'cancelled') continue;
     if (o.paid) {
       revenue.total += o.total;
@@ -89,26 +101,26 @@ async function getSummaryByDate(date) {
     }
   }
 
-  const active = orders.filter(o => o.status !== 'done' && o.status !== 'cancelled');
+  const active = ordersForDate.filter(o => o.status !== 'done' && o.status !== 'cancelled');
   return {
-    total_orders: active.length + orders.filter(o => o.status === 'done').length,
-    waiting:  orders.filter(o => o.status === 'waiting').length,
-    cooking:  orders.filter(o => o.status === 'cooking').length,
-    ready:    orders.filter(o => o.status === 'ready').length,
-    done:     orders.filter(o => o.status === 'done').length,
-    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    total_orders: active.length + ordersForDate.filter(o => o.status === 'done').length,
+    waiting:  ordersForDate.filter(o => o.status === 'waiting').length,
+    cooking:  ordersForDate.filter(o => o.status === 'cooking').length,
+    ready:    ordersForDate.filter(o => o.status === 'ready').length,
+    done:     ordersForDate.filter(o => o.status === 'done').length,
+    cancelled: ordersForDate.filter(o => o.status === 'cancelled').length,
     revenue,
     item_counts: itemCounts,
   };
 }
 
 async function getDistinctDates() {
-  const docs = await ds.findAsync({ _id: { $ne: '__counter__' } }, { date: 1, _id: 0 });
-  return [...new Set(docs.map(d => d.date))].sort().reverse();
+  const dates = await orders.distinct('date');
+  return dates.sort().reverse();
 }
 
 async function getBooth() {
-  const doc = await ds.findOneAsync({ _id: '__booth__' });
+  const doc = await booth.findOne({ _id: 'state' });
   if (!doc) return { open: false, open_time: null, close_time: null };
   return { open: doc.open, open_time: doc.open_time || null, close_time: doc.close_time || null };
 }
@@ -117,15 +129,15 @@ async function setBooth({ open, open_time, close_time }) {
   const $set = { open };
   if (open_time  !== undefined) $set.open_time  = open_time;
   if (close_time !== undefined) $set.close_time = close_time;
-  await ds.updateAsync({ _id: '__booth__' }, { $set }, { upsert: true });
+  await booth.updateOne({ _id: 'state' }, { $set }, { upsert: true });
 }
 
 async function deleteOrder(id) {
-  await ds.removeAsync({ id }, {});
+  await orders.deleteOne({ id });
 }
 
 async function deleteCompletedOrders(date) {
-  await ds.removeAsync({ date, status: 'done' }, { multi: true });
+  await orders.deleteMany({ date, status: 'done' });
 }
 
-module.exports = { getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, deleteOrder, deleteCompletedOrders };
+module.exports = { connect, getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, deleteOrder, deleteCompletedOrders };

@@ -1,5 +1,5 @@
 // In-memory demo order store — orders created during demo mode are never persisted to DB.
-// High IDs (starting at 9000) avoid conflicts with real nedb sequential IDs.
+// High IDs (starting at 9000) avoid conflicts with real sequential order IDs.
 
 const demoOrders = new Map();
 let seq = 9000;
