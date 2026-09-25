@@ -807,3 +807,37 @@ body {
   #form-panel  { border-left: none; border-bottom: 2px solid var(--border); }
   .stat-value  { font-size: 1.2rem; }
 }
+
+/* ─── edit order ─────────────────────────────────────────────────────────────── */
+.edit-order-btn {
+  margin-inline-start: auto;
+  padding: 4px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.edit-order-btn:hover,
+.edit-order-btn:active { border-color: var(--primary); color: var(--primary); }
+
+.edit-modal { max-width: 520px; }
+#edit-cart {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  min-height: 52px;
+  background: #fafafa;
+}
+#edit-total {
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--primary);
+  padding: 7px 0 12px;
+}
+#edit-save-btn { width: 100%; margin-top: 12px; padding: 12px; font-size: 1rem; }
+#edit-save-btn:disabled { opacity: .5; cursor: not-allowed; }

@@ -74,9 +74,21 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: 'מזהה הזמנה לא תקין' });
 
+  const changes = { ...req.body };
+  if (changes.items !== undefined) {
+    const items = changes.items;
+    const valid = Array.isArray(items) && items.length > 0 && items.every(it =>
+      it && typeof it.menu_item === 'string' && it.menu_item.trim() &&
+      typeof it.price === 'number' && it.price >= 0 &&
+      Number.isInteger(it.quantity) && it.quantity >= 1);
+    if (!valid) return res.status(400).json({ error: 'רשימת פריטים לא תקינה' });
+    // Total is always derived from the items so it can't drift from them.
+    changes.total = items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+  }
+
   const demoOrder = demoStore.getDemoOrderById(id);
   if (demoOrder) {
-    const order = demoStore.updateDemoOrder(id, req.body);
+    const order = demoStore.updateDemoOrder(id, changes);
     req.broadcast({ type: 'order:updated', payload: order });
     return res.json(order);
   }
@@ -84,7 +96,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   const existing = await db.getOrderById(id);
   if (!existing) return res.status(404).json({ error: 'הזמנה לא נמצאה' });
 
-  const order = await db.updateOrder(id, req.body);
+  const order = await db.updateOrder(id, changes);
   req.broadcast({ type: 'order:updated', payload: order });
   res.json(order);
 }));

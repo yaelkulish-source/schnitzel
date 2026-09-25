@@ -111,6 +111,21 @@
   </div>
 </div>
 
+<!-- ─── Edit Order Modal ────────────────────────────────────────────────────── -->
+<div id="edit-modal" class="modal-backdrop hidden">
+  <div class="modal edit-modal">
+    <div class="modal-header">
+      <h2 id="edit-title">עריכת הזמנה</h2>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div id="edit-cart"></div>
+    <div id="edit-total"></div>
+    <div class="section-label">הוספת פריט</div>
+    <div class="menu-grid" id="edit-menu-grid"></div>
+    <button class="btn btn-primary" id="edit-save-btn" onclick="saveEdit()">💾 שמור</button>
+  </div>
+</div>
+
 <!-- ─── Daily Summary Modal ─────────────────────────────────────────────────── -->
 <div id="summary-modal" class="modal-backdrop hidden">
   <div class="modal">

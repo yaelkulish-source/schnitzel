@@ -279,6 +279,101 @@ async function clearCompleted() {
   } catch { alert('שגיאה בניקוי הזמנות'); }
 }
 
+// ─── edit order modal ─────────────────────────────────────────────────────────
+
+const edit = { orderId: null, items: [] };
+
+function openEditModal(id) {
+  const order = state.orders.find(o => o.id === id);
+  if (!order) return;
+  edit.orderId = id;
+  // Deep copy so changes stay local until saved (keeps spreads on existing items)
+  edit.items = JSON.parse(JSON.stringify(order.items));
+  document.getElementById('edit-title').textContent = `עריכת הזמנה #${order.id} — ${order.name}`;
+  document.getElementById('edit-menu-grid').innerHTML = MENU.allItems.map(item => `
+    <button class="menu-item-btn" onclick="editAddItem('${item.id}')">
+      <span class="item-emoji">${item.emoji}</span>
+      <span class="item-name">${esc(item.name)}</span>
+      <span class="item-price">${item.price}₪</span>
+    </button>`).join('');
+  renderEditModal();
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+  edit.orderId = null;
+  edit.items = [];
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+
+function editTotal() {
+  return edit.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+}
+
+function renderEditModal() {
+  const cartEl = document.getElementById('edit-cart');
+  cartEl.innerHTML = edit.items.length
+    ? edit.items.map((item, i) => `
+      <div class="cart-row">
+        <span class="cart-name">${esc(item.menu_item)}</span>
+        <div class="qty-control">
+          <button class="qty-btn" onclick="editChangeQty(${i},-1)">−</button>
+          <span class="qty-value">${item.quantity}</span>
+          <button class="qty-btn" onclick="editChangeQty(${i},1)">+</button>
+        </div>
+        <span class="cart-price">${item.price * item.quantity}₪</span>
+      </div>`).join('')
+    : '<div id="cart-empty">אין פריטים — להסרת ההזמנה השתמשו בביטול</div>';
+  document.getElementById('edit-total').innerHTML =
+    edit.items.length ? `<strong>סה"כ: ${editTotal()}₪</strong>` : '';
+  document.getElementById('edit-save-btn').disabled = edit.items.length === 0;
+}
+
+function editChangeQty(index, delta) {
+  const item = edit.items[index];
+  if (!item) return;
+  item.quantity += delta;
+  if (item.quantity <= 0) {
+    edit.items.splice(index, 1);
+  } else if (Array.isArray(item.spreads?.[0]) && item.spreads.length > item.quantity) {
+    // Per-unit spreads: drop the entries for removed units
+    item.spreads = item.spreads.slice(0, item.quantity);
+  }
+  renderEditModal();
+}
+
+function editAddItem(menuId) {
+  const menuItem = MENU.byId[menuId];
+  if (!menuItem) return;
+  const i = edit.items.findIndex(it => it.menu_item === menuItem.name && it.price === menuItem.price);
+  if (i >= 0) {
+    editChangeQty(i, 1);
+  } else {
+    edit.items.push({ menu_item: menuItem.name, price: menuItem.price, quantity: 1, spreads: [] });
+    renderEditModal();
+  }
+}
+
+async function saveEdit() {
+  const id = edit.orderId;
+  if (id === null || !edit.items.length) return;
+
+  const btn = document.getElementById('edit-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'שומר…';
+
+  try {
+    await api.patch(`/api/orders/${id}`, { items: edit.items, total: editTotal() });
+    closeEditModal();
+    // Card updates on all screens via the WebSocket order:updated broadcast.
+  } catch (e) {
+    alert('שגיאה בשמירת השינויים: ' + e.message);
+    btn.disabled = false;
+  } finally {
+    btn.textContent = '💾 שמור';
+  }
+}
+
 // ─── payment popup ────────────────────────────────────────────────────────────
 
 function showPaymentPopup(id) {
@@ -572,6 +667,7 @@ function buildCard(order, mode) {
         ${isUrgent    ? '<span class="urgent-badge">⚠️ דחוף!</span>'  : ''}
         ${isCancelled ? '<span class="cancelled-badge">בוטל</span>'   : ''}
         ${isUnpaid    ? '<span class="unpaid-badge">ממתין לתשלום</span>' : ''}
+        ${mode === 'active' && !isCancelled ? `<button class="edit-order-btn" onclick="openEditModal(${order.id})">✏️ ערוך</button>` : ''}
       </div>
       <div class="card-items">${itemsHtml}</div>
       <div class="card-meta">${metaParts}</div>
@@ -611,6 +707,7 @@ function buildUpcomingCard(order) {
         <span class="order-name">${esc(order.name)}</span>
         <span class="order-source wa">ווצאפ</span>
         <span class="upcoming-badge">📅 ${order.pickup_time}</span>
+        <button class="edit-order-btn" onclick="openEditModal(${order.id})">✏️ ערוך</button>
       </div>
       <div class="card-items">${itemsHtml}</div>
       <div class="card-meta">
@@ -841,6 +938,9 @@ async function init() {
   document.getElementById('payment-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closePaymentModal();
   });
+  document.getElementById('edit-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeEditModal();
+  });
 
   document.querySelectorAll('.tab-btn').forEach(btn =>
     btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
@@ -886,6 +986,7 @@ async function init() {
 
   ws.on('order:deleted', ({ id }) => {
     state.orders = state.orders.filter(o => o.id !== id);
+    if (edit.orderId === id) closeEditModal();
     renderAll();
   });
 
