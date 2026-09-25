@@ -50,8 +50,9 @@ const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`PATCH ${path} → ${res.status}`);
-    return res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `PATCH ${path} → ${res.status}`);
+    return data;
   },
 
   async delete(path) {
