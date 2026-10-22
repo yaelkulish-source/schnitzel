@@ -9,6 +9,7 @@ let formInitialized = false;
 let boothOpenedAt   = null;
 let boothHours      = { open_time: null, close_time: null };
 let isSubmitting    = false;
+let eventActive     = false; // event mode on → form orders are closed
 
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
@@ -30,6 +31,14 @@ function applyBoothState() {
 
   // Don't change anything if we're already on the confirmation screen
   if (confirmEl && !confirmEl.classList.contains('hidden')) return;
+
+  const eventClosedEl = document.getElementById('event-closed-state');
+  eventClosedEl.classList.toggle('hidden', !eventActive);
+  if (eventActive) {
+    closedEl.classList.add('hidden');
+    formEl.classList.add('hidden');
+    return;
+  }
 
   if (boothOpen) {
     if (!boothOpenedAt) boothOpenedAt = new Date();
@@ -378,6 +387,11 @@ async function init() {
   }
 
   try {
+    const ev = await api.get('/api/event');
+    eventActive = !!ev.active;
+  } catch { /* keep form behaviour unchanged if this fails */ }
+
+  try {
     const booth = await api.get('/api/booth');
     boothOpen  = booth.open;
     boothHours = { open_time: booth.open_time || null, close_time: booth.close_time || null };
@@ -391,6 +405,10 @@ async function init() {
   ws.on('booth:updated', (booth) => {
     boothOpen  = booth.open;
     boothHours = { open_time: booth.open_time || null, close_time: booth.close_time || null };
+    applyBoothState();
+  });
+  ws.on('event:updated', (ev) => {
+    eventActive = !!ev.active;
     applyBoothState();
   });
   ws.connect();

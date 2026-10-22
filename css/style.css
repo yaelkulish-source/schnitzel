@@ -609,6 +609,35 @@ body {
 .booth-toggle.booth-closed { background: var(--danger-light);  color: var(--danger);  border-color: var(--danger); }
 .booth-toggle.booth-demo   { background: #fef9c3; color: #854d0e; border-color: #ca8a04; }
 
+.booth-toggle.event-off    { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+.booth-toggle.event-on     { background: #ede9fe; color: #5b21b6; border-color: #7c3aed; }
+
+/* ─── event counter ──────────────────────────────────────────────────────────── */
+#event-counter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 8px 16px;
+  background: #7c3aed;
+  color: #fff;
+}
+#event-counter.hidden { display: none; }
+.event-counter-title { font-size: 1rem; font-weight: 900; }
+.event-count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.15);
+  font-weight: 700;
+}
+.event-count strong { font-size: 1.3rem; font-weight: 900; }
+.event-count small  { font-size: .75rem; opacity: .9; }
+.event-count.event-low { background: #f97316; }
+.event-summary h3 small { font-weight: 400; opacity: .7; font-size: .8em; }
+
 /* ─── demo banner ────────────────────────────────────────────────────────────── */
 .demo-banner {
   background: #ca8a04;
