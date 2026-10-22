@@ -11,6 +11,8 @@ const state = {
   historyDate:  null,
   boothOpen:    false,
   demoMode:     false,
+  eventMode:    false,
+  eventName:    null,
 };
 
 let pendingCollectId = null;
@@ -82,6 +84,11 @@ function formatSpreads(spreads, quantity) {
   return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
 }
 
+// Reception uses the event menu while event mode is on; otherwise the regular menu.
+function activeMenu() {
+  return state.eventMode ? EVENT_MENU : MENU;
+}
+
 // ─── cart ─────────────────────────────────────────────────────────────────────
 
 function cartAdd(itemId) {
@@ -115,7 +122,7 @@ function cartReset() {
 function cartTotal() {
   let total = 0;
   for (const [id, qty] of cartQty) {
-    const item = MENU.byId[id];
+    const item = activeMenu().byId[id];
     if (item) total += item.price * qty;
   }
   return total;
@@ -124,7 +131,7 @@ function cartTotal() {
 function cartToItems() {
   const items = [];
   for (const [id, qty] of cartQty) {
-    const item = MENU.byId[id];
+    const item = activeMenu().byId[id];
     if (item) items.push({ menu_item: item.name, price: item.price, quantity: qty, spreads: [] });
   }
   return items;
@@ -140,7 +147,7 @@ function renderCart() {
   }
   let html = '';
   for (const [id, qty] of cartQty) {
-    const item = MENU.byId[id];
+    const item = activeMenu().byId[id];
     if (!item) continue;
     html += `
       <div class="cart-row">
@@ -165,8 +172,12 @@ function refreshSubmitBtn() {
 // ─── menu grid ────────────────────────────────────────────────────────────────
 
 function renderMenuGrid() {
-  renderItemGroup('food-grid',   MENU.food);
-  renderItemGroup('drinks-grid', MENU.drinks);
+  const menu = activeMenu();
+  renderItemGroup('food-grid',   menu.food);
+  renderItemGroup('drinks-grid', menu.drinks);
+  const noDrinks = menu.drinks.length === 0;
+  document.getElementById('drinks-label').style.display = noDrinks ? 'none' : '';
+  document.getElementById('drinks-grid').style.display  = noDrinks ? 'none' : '';
 }
 
 function renderItemGroup(containerId, items) {
@@ -290,7 +301,7 @@ function openEditModal(id) {
   // Deep copy so changes stay local until saved (keeps spreads on existing items)
   edit.items = JSON.parse(JSON.stringify(order.items));
   document.getElementById('edit-title').textContent = `עריכת הזמנה #${order.id} — ${order.name}`;
-  document.getElementById('edit-menu-grid').innerHTML = MENU.allItems.map(item => `
+  document.getElementById('edit-menu-grid').innerHTML = activeMenu().allItems.map(item => `
     <button class="menu-item-btn" onclick="editAddItem('${item.id}')">
       <span class="item-emoji">${item.emoji}</span>
       <span class="item-name">${esc(item.name)}</span>
@@ -343,7 +354,7 @@ function editChangeQty(index, delta) {
 }
 
 function editAddItem(menuId) {
-  const menuItem = MENU.byId[menuId];
+  const menuItem = activeMenu().byId[menuId];
   if (!menuItem) return;
   const i = edit.items.findIndex(it => it.menu_item === menuItem.name && it.price === menuItem.price);
   if (i >= 0) {
@@ -484,6 +495,70 @@ function renderBoothToggle() {
   }
 }
 
+// ─── event mode ───────────────────────────────────────────────────────────────
+
+async function toggleEventMode() {
+  const turnOn = !state.eventMode;
+  const msg = turnOn
+    ? 'להפעיל מצב אירוע "טעם הבית"?\nהתפריט יוחלף בתפריט האירוע בכל הטאבלטים.'
+    : 'לכבות מצב אירוע?\nהתפריט הרגיל יחזור בכל הטאבלטים.';
+  if (!confirm(msg)) return;
+  try {
+    await api.patch('/api/event', { active: turnOn });
+    // All screens (including this one) switch via the event:updated broadcast.
+  } catch { alert('שגיאה בעדכון מצב אירוע'); }
+}
+
+function applyEventMode({ active, name }) {
+  const changed = state.eventMode !== !!active;
+  state.eventMode = !!active;
+  state.eventName = name || null;
+  if (changed) {
+    // Cart item ids belong to the previous menu — start fresh.
+    cartReset();
+    renderMenuGrid();
+    if (edit.orderId !== null) closeEditModal();
+  }
+  renderEventToggle();
+  renderEventCounter();
+}
+
+function renderEventToggle() {
+  const btn = document.getElementById('event-toggle-btn');
+  if (!btn) return;
+  btn.textContent = state.eventMode ? `🎪 אירוע: ${state.eventName} — פעיל` : '🎪 מצב אירוע: כבוי';
+  btn.className   = `btn booth-toggle ${state.eventMode ? 'event-on' : 'event-off'}`;
+}
+
+// Portions sold per event item (event-tagged orders, excluding cancelled), vs. stock.
+function renderEventCounter() {
+  const el = document.getElementById('event-counter');
+  if (!el) return;
+  if (!state.eventMode) { el.classList.add('hidden'); return; }
+
+  const sold = {};
+  for (const o of state.orders) {
+    if (!o.event || o.status === 'cancelled') continue;
+    for (const item of o.items) sold[item.menu_item] = (sold[item.menu_item] || 0) + item.quantity;
+  }
+
+  el.innerHTML = `<span class="event-counter-title">🎪 ${esc(state.eventName)}</span>` +
+    EVENT_MENU.food.map(item => {
+      const n = sold[item.name] || 0;
+      if (item.stock == null) {
+        return `<span class="event-count"><span>${item.emoji} ${esc(item.name)}</span><strong>${n}</strong><small>נמכרו</small></span>`;
+      }
+      const left = item.stock - n;
+      const low  = left < 10;
+      return `<span class="event-count${low ? ' event-low' : ''}">
+        <span>${item.emoji} ${esc(item.name)}</span>
+        <strong>${n} / ${item.stock}</strong>
+        <small>${left > 0 ? `נשארו ${left}` : 'אזל!'}</small>
+      </span>`;
+    }).join('');
+  el.classList.remove('hidden');
+}
+
 // ─── sorting ──────────────────────────────────────────────────────────────────
 
 function sortedUpcoming() {
@@ -519,6 +594,7 @@ function sortedActive() {
 
 function renderAll() {
   renderStats();
+  renderEventCounter();
   if (state.tab === 'active') {
     renderOrderGrid('orders-list', sortedActive(), 'active');
     renderUpcomingSection();
@@ -852,6 +928,7 @@ async function loadHistoryDay(date) {
         <div class="summary-row"><span>פייבוקס</span><span>${summary.revenue.paybox}₪</span></div>
         <div class="summary-row"><span>ממתין לתשלום</span><span>${summary.revenue.pending}₪</span></div>
         ${itemRows ? `<div style="margin-top:10px">${itemRows}</div>` : ''}
+        ${buildEventSummary(summary.event)}
       </div>
       <div class="orders-grid" id="history-orders"></div>`;
 
@@ -862,6 +939,26 @@ async function loadHistoryDay(date) {
 }
 
 // ─── daily summary modal ──────────────────────────────────────────────────────
+
+// Separate totals for event-tagged orders (already included in the day totals above).
+function buildEventSummary(ev) {
+  if (!ev) return '';
+  const itemRows = Object.entries(ev.item_counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => `<div class="summary-row"><span>${esc(name)}</span><span>×${n}</span></div>`)
+    .join('');
+  return `
+    <div class="summary-section event-summary">
+      <h3>🎪 אירוע: ${esc(ev.name)} <small>(כלול בסה"כ)</small></h3>
+      <div class="summary-row"><span>הזמנות</span><span>${ev.orders}</span></div>
+      <div class="summary-row"><span>מזומן</span><span>${ev.revenue.cash}₪</span></div>
+      <div class="summary-row"><span>ביט</span><span>${ev.revenue.bit}₪</span></div>
+      <div class="summary-row"><span>פייבוקס</span><span>${ev.revenue.paybox}₪</span></div>
+      <div class="summary-row total-row"><span>סה"כ אירוע</span><span>${ev.revenue.total}₪</span></div>
+      <div class="summary-row"><span>ממתין לתשלום</span><span>${ev.revenue.pending}₪</span></div>
+      ${itemRows}
+    </div>`;
+}
 
 async function showDailySummary() {
   try {
@@ -891,7 +988,8 @@ async function showDailySummary() {
         <div class="summary-row total-row"><span>סה"כ</span><span>${s.revenue.total}₪</span></div>
         <div class="summary-row"><span>ממתין לתשלום</span><span>${s.revenue.pending}₪</span></div>
       </div>
-      ${itemRows ? `<div class="summary-section"><h3>כמות לפי פריט</h3>${itemRows}</div>` : ''}`;
+      ${itemRows ? `<div class="summary-section"><h3>כמות לפי פריט</h3>${itemRows}</div>` : ''}
+      ${buildEventSummary(s.event)}`;
 
     document.getElementById('summary-modal').classList.remove('hidden');
   } catch {
@@ -929,6 +1027,7 @@ async function init() {
   document.getElementById('summary-btn').addEventListener('click', showDailySummary);
   document.getElementById('backup-btn').addEventListener('click', downloadBackup);
   document.getElementById('booth-toggle-btn').addEventListener('click', toggleBooth);
+  document.getElementById('event-toggle-btn').addEventListener('click', toggleEventMode);
   document.getElementById('clear-completed-btn').addEventListener('click', clearCompleted);
   document.getElementById('modal-close').addEventListener('click', () =>
     document.getElementById('summary-modal').classList.add('hidden'));
@@ -951,6 +1050,11 @@ async function init() {
     state.boothOpen = booth.open;
     renderBoothToggle();
   } catch { renderBoothToggle(); }
+
+  // Load event mode
+  try {
+    applyEventMode(await api.get('/api/event'));
+  } catch { renderEventToggle(); }
 
   // Load from local IndexedDB cache first (instant render)
   try {
@@ -1010,6 +1114,11 @@ async function init() {
       renderBoothToggle();
     }
   });
+
+  ws.on('event:updated', applyEventMode);
+
+  // Re-sync event mode after a reconnect in case a broadcast was missed.
+  ws.on('_connected', () => api.get('/api/event').then(applyEventMode).catch(() => {}));
 
   ws.on('_connected',    () => setConnected(true));
   ws.on('_disconnected', () => setConnected(false));

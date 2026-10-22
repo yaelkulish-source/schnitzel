@@ -62,6 +62,7 @@ async function createOrder(data) {
     paid:           data.paid           || false,
     created_at:     now,
     date:           now.slice(0, 10),
+    event:          data.event          || null,
   };
 
   await orders.insertOne(order);
@@ -101,6 +102,24 @@ async function getSummaryByDate(date) {
     }
   }
 
+  // Event orders (tagged with an event name) are also summarised separately.
+  // Old orders have no event field and are simply skipped here.
+  let event = null;
+  for (const o of ordersForDate) {
+    if (!o.event || o.status === 'cancelled') continue;
+    event ??= { name: o.event, orders: 0, revenue: { total: 0, cash: 0, bit: 0, paybox: 0, pending: 0 }, item_counts: {} };
+    event.orders++;
+    if (o.paid) {
+      event.revenue.total += o.total;
+      event.revenue[o.payment_method] = (event.revenue[o.payment_method] || 0) + o.total;
+    } else {
+      event.revenue.pending += o.total;
+    }
+    for (const item of o.items) {
+      event.item_counts[item.menu_item] = (event.item_counts[item.menu_item] || 0) + item.quantity;
+    }
+  }
+
   const active = ordersForDate.filter(o => o.status !== 'done' && o.status !== 'cancelled');
   return {
     total_orders: active.length + ordersForDate.filter(o => o.status === 'done').length,
@@ -111,6 +130,7 @@ async function getSummaryByDate(date) {
     cancelled: ordersForDate.filter(o => o.status === 'cancelled').length,
     revenue,
     item_counts: itemCounts,
+    event,
   };
 }
 
@@ -132,6 +152,19 @@ async function setBooth({ open, open_time, close_time }) {
   await booth.updateOne({ _id: 'state' }, { $set }, { upsert: true });
 }
 
+// ─── event mode (stored in the booth collection as its own doc) ───────────────
+
+const EVENT_NAME = 'טעם הבית';
+
+async function getEventMode() {
+  const doc = await booth.findOne({ _id: 'event' });
+  return { active: !!doc?.active, name: EVENT_NAME };
+}
+
+async function setEventMode(active) {
+  await booth.updateOne({ _id: 'event' }, { $set: { active } }, { upsert: true });
+}
+
 async function deleteOrder(id) {
   await orders.deleteOne({ id });
 }
@@ -140,4 +173,4 @@ async function deleteCompletedOrders(date) {
   await orders.deleteMany({ date, status: 'done' });
 }
 
-module.exports = { connect, getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, deleteOrder, deleteCompletedOrders };
+module.exports = { connect, getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, getEventMode, setEventMode, deleteOrder, deleteCompletedOrders };

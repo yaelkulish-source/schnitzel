@@ -37,13 +37,17 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'סכום לא תקין' });
   }
 
+  // Tag with the active event (server-side state, so all tablets agree).
+  const eventMode = await db.getEventMode();
+  const event = eventMode.active ? eventMode.name : null;
+
   if (demo) {
-    const order = demoStore.createDemoOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid });
+    const order = demoStore.createDemoOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid, event });
     req.broadcast({ type: 'order:created', payload: order });
     return res.status(201).json(order);
   }
 
-  const order = await db.createOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid });
+  const order = await db.createOrder({ name: name.trim(), phone, source, pickup_time, items, total, note, payment_method, paid, event });
   req.broadcast({ type: 'order:created', payload: order });
   res.status(201).json(order);
 }));

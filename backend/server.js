@@ -48,6 +48,21 @@ app.patch('/api/booth', asyncHandler(async (req, res) => {
   res.json(booth);
 }));
 
+// ─── event mode ───────────────────────────────────────────────────────────────
+
+app.get('/api/event', asyncHandler(async (_req, res) => {
+  res.json(await db.getEventMode());
+}));
+
+app.patch('/api/event', asyncHandler(async (req, res) => {
+  const { active } = req.body;
+  if (typeof active !== 'boolean') return res.status(400).json({ error: 'active must be boolean' });
+  await db.setEventMode(active);
+  const eventMode = await db.getEventMode();
+  broadcast({ type: 'event:updated', payload: eventMode });
+  res.json(eventMode);
+}));
+
 // ─── demo mode endpoints ──────────────────────────────────────────────────────
 
 app.post('/api/demo/open', (req, res) => {

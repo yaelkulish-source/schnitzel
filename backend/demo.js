@@ -22,6 +22,7 @@ function createDemoOrder(data) {
     paid:           data.paid            || false,
     created_at:     now,
     date:           now.slice(0, 10),
+    event:          data.event           || null,
     demo:           true,
   };
   demoOrders.set(id, order);
