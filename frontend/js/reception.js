@@ -521,6 +521,7 @@ function applyEventMode({ active, name }) {
   }
   renderEventToggle();
   renderEventCounter();
+  renderUpcomingSection();
 }
 
 function renderEventToggle() {
@@ -543,7 +544,7 @@ function renderEventCounter() {
   }
 
   el.innerHTML = `<span class="event-counter-title">🎪 ${esc(state.eventName)}</span>` +
-    EVENT_MENU.food.map(item => {
+    EVENT_MENU.allItems.map(item => {
       const n = sold[item.name] || 0;
       if (item.stock == null) {
         return `<span class="event-count"><span>${item.emoji} ${esc(item.name)}</span><strong>${n}</strong><small>נמכרו</small></span>`;
@@ -768,6 +769,7 @@ function renderUpcomingSection() {
   if (!section || !list) return;
   const orders  = sortedUpcoming();
   section.classList.toggle('hidden', orders.length === 0);
+  section.style.display = state.eventMode ? 'none' : '';
   list.innerHTML = orders.map(buildUpcomingCard).join('');
 }
 
