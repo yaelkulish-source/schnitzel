@@ -29,7 +29,11 @@ const EVENT_MENU = {
     { id: 'event_schnitzelons',      emoji: '🍗',   name: 'שניצלונים',   price: 20, hasSpreads: false, stock: 33 },
     { id: 'event_chips',             emoji: '🍟',   name: "צ'יפס",       price: 10, hasSpreads: false },
   ],
-  drinks: [],
+  drinks: [
+    { id: 'event_tropical', emoji: '🧃', name: 'טרופית', price: 3,  hasSpreads: false },
+    { id: 'event_beer',     emoji: '🍺', name: 'בירה',   price: 10, hasSpreads: false },
+    { id: 'event_can',      emoji: '🥤', name: 'פחית',   price: 8,  hasSpreads: false },
+  ],
   spreadsMain:       MENU.spreadsMain,
   spreadsCondiments: MENU.spreadsCondiments,
 };
