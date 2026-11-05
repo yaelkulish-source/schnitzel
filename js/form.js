@@ -14,6 +14,11 @@ let eventActive     = false; // event mode on → form orders are closed
 const cartQty     = new Map(); // item id → quantity
 const cartSpreads = new Map(); // item id → Array<Set<spreadName>>, one Set per unit
 
+// Items whose units carry a spreads/sauces selection (same storage for both kinds).
+function hasPerUnitChoices(def) {
+  return !!(def?.hasSpreads || def?.hasCondiments);
+}
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function esc(s) {
@@ -85,7 +90,7 @@ function buildItemsArray() {
   for (const [id, qty] of cartQty) {
     const def = MENU.byId[id];
     if (!def) continue;
-    const spreads = def.hasSpreads
+    const spreads = hasPerUnitChoices(def)
       ? (cartSpreads.get(id) ?? []).map(s => [...s])
       : [];
     items.push({ menu_item: def.name, price: def.price, quantity: qty, spreads });
@@ -169,7 +174,7 @@ function toggleItem(itemId) {
     document.querySelector(`[data-item-id="${itemId}"]`)?.classList.remove('selected');
   } else {
     cartQty.set(itemId, 1);
-    if (def?.hasSpreads) cartSpreads.set(itemId, [new Set()]);
+    if (hasPerUnitChoices(def)) cartSpreads.set(itemId, [new Set()]);
     document.querySelector(`[data-item-id="${itemId}"]`)?.classList.add('selected');
   }
   renderCart();
@@ -185,7 +190,7 @@ function changeQty(itemId, delta) {
   } else {
     cartQty.set(itemId, q);
     const def = MENU.byId[itemId];
-    if (def?.hasSpreads) {
+    if (hasPerUnitChoices(def)) {
       const arr = cartSpreads.get(itemId) ?? [];
       if (delta > 0) arr.push(new Set());
       else arr.pop();
@@ -241,7 +246,9 @@ function buildCartCard(itemId, qty) {
   if (!def) return '';
   const lineTotal = def.price * qty;
 
-  const spreadsSectionHtml = def.hasSpreads ? buildSpreadsSection(itemId, qty) : '';
+  const spreadsSectionHtml = def.hasSpreads     ? buildSpreadsSection(itemId, qty)
+                           : def.hasCondiments ? buildSpreadsSection(itemId, qty, true)
+                           : '';
 
   return `
     <div class="cart-card" id="cc-${itemId}">
@@ -258,7 +265,8 @@ function buildCartCard(itemId, qty) {
     </div>`;
 }
 
-function buildSpreadsSection(itemId, qty) {
+// condimentsOnly → just the ketchup/mayo row, titled "רטבים" (chips / schnitzelons).
+function buildSpreadsSection(itemId, qty, condimentsOnly = false) {
   const spreadsArr = cartSpreads.get(itemId) ?? [];
   const units = [];
 
@@ -277,7 +285,11 @@ function buildSpreadsSection(itemId, qty) {
         data-spread="${itemId}:${i}:${name}"
         onclick="toggleSpread('${itemId}',${i},'${name}')">${esc(name)}</button>`).join('');
 
-    units.push(`
+    units.push(condimentsOnly ? `
+      <div class="spread-unit">
+        ${qty > 1 ? `<div class="spread-unit-label">#${i + 1}</div>` : ''}
+        <div class="spreads-group">${condBtns}</div>
+      </div>` : `
       <div class="spread-unit">
         ${qty > 1 ? `<div class="spread-unit-label">#${i + 1}</div>` : ''}
         <div class="spreads-group">${mainBtns}</div>
@@ -288,7 +300,7 @@ function buildSpreadsSection(itemId, qty) {
 
   return `
     <div class="spreads-section">
-      <div class="spreads-title">ממרחים</div>
+      <div class="spreads-title">${condimentsOnly ? 'רטבים' : 'ממרחים'}</div>
       ${units.join('')}
     </div>`;
 }

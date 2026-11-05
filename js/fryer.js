@@ -85,6 +85,26 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// Same formatting as reception's formatSpreads (per-unit string[][] or old string[]).
+function formatSpreads(spreads, quantity) {
+  if (!spreads?.length) return '';
+  if (Array.isArray(spreads[0])) {
+    const lines = spreads.map((unit, i) => {
+      const prefix = quantity > 1 ? `#${i + 1}: ` : '';
+      return unit.length ? prefix + esc(unit.join(' · ')) : '';
+    }).filter(Boolean);
+    return lines.length ? `<div class="card-item-spreads">${lines.join('<br>')}</div>` : '';
+  }
+  return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
+}
+
+// Sauces are shown only for items with the ketchup/mayo picker (chips, schnitzelons).
+const CONDIMENT_ITEM_NAMES = new Set(MENU.food.filter(f => f.hasCondiments).map(f => f.name));
+
+function itemSauces(item) {
+  return CONDIMENT_ITEM_NAMES.has(item.menu_item) ? formatSpreads(item.spreads, item.quantity) : '';
+}
+
 // ─── action ───────────────────────────────────────────────────────────────────
 
 async function markReady(id, btn) {
@@ -169,6 +189,7 @@ function buildCard(order) {
   const itemsHtml = foodItems.map(item => `
     <div>
       ${item.quantity > 1 ? `<span class="card-item-qty">${item.quantity}×</span> ` : ''}${esc(item.menu_item)}
+      ${itemSauces(item)}
     </div>`).join('');
 
   const timerClass = isUrgent ? 'card-timer urgent' : 'card-timer';
@@ -207,7 +228,7 @@ function buildUpcomingCard(order) {
   const mins      = minutesUntil(order.pickup_time);
   const foodItems = order.items.filter(item => !DRINK_NAMES.has(item.menu_item));
   const itemsHtml = foodItems.map(item =>
-    `<div>${item.quantity > 1 ? `<span class="card-item-qty">${item.quantity}×</span> ` : ''}${esc(item.menu_item)}</div>`
+    `<div>${item.quantity > 1 ? `<span class="card-item-qty">${item.quantity}×</span> ` : ''}${esc(item.menu_item)}${itemSauces(item)}</div>`
   ).join('');
   return `
     <div class="fryer-card upcoming-fryer-card" id="fcard-${order.id}">

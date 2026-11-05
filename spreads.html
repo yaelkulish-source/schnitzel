@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ממרחים — דוכן שניצלים</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, 'Segoe UI', Arial, sans-serif;
+      direction: rtl;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #ecfdf5;
+      color: #111;
+    }
+
+    /* ─── header ─────────────────────────────────────────────────────────── */
+    #spreads-header {
+      background: #065f46;
+      color: #fff;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-shrink: 0;
+    }
+    .spreads-title-text { font-size: 1.3rem; font-weight: 900; }
+    #current-time { font-size: 2.2rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+    #conn-wrap { margin-right: auto; display: flex; align-items: center; gap: 6px; font-size: 0.85rem; opacity: 0.85; }
+    #conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; flex-shrink: 0; }
+    #conn-dot.connected { background: #4ade80; }
+
+    /* ─── scrollable main ────────────────────────────────────────────────── */
+    #spreads-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .section-title {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: #4b5563;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .empty { font-size: 1.5rem; color: #9ca3af; text-align: center; padding: 30px 0; width: 100%; }
+
+    /* ─── order card ─────────────────────────────────────────────────────── */
+    .sp-card {
+      background: #fff;
+      border: 3px solid #10b981;
+      border-radius: 16px;
+      padding: 16px;
+      flex: 1 1 300px;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.09);
+    }
+    .sp-card.upcoming { border-style: dashed; opacity: .6; }
+
+    .sp-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .sp-num  { font-size: 1.4rem; font-weight: 900; color: #065f46; }
+    .sp-name { font-size: 1.8rem; font-weight: 900; flex: 1; }
+    .sp-age  { font-size: 1.1rem; font-weight: 700; color: #374151; white-space: nowrap; }
+    .sp-age.old { color: #dc2626; }
+    .sp-pickup { font-size: 1rem; font-weight: 700; color: #1d4ed8; width: 100%; }
+
+    .sp-unit {
+      border-top: 2px solid #d1fae5;
+      padding-top: 10px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .sp-unit-num { font-size: 1.6rem; font-weight: 900; color: #065f46; min-width: 2.6rem; line-height: 1.2; }
+    .sp-unit-body { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .sp-spreads { font-size: 1.75rem; font-weight: 800; line-height: 1.3; }
+    .sp-ask     { font-size: 1.05rem; font-weight: 600; color: #9ca3af; }
+    .sp-cond {
+      align-self: flex-start;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #92400e;
+      background: #fef3c7;
+      border-radius: 20px;
+      padding: 3px 12px;
+    }
+
+    .sp-note { font-size: 1.05rem; font-weight: 600; color: #374151; background: #f3f4f6; border-radius: 10px; padding: 8px 10px; }
+
+    .sp-ready-btn {
+      min-height: 70px;
+      border: none;
+      border-radius: 14px;
+      background: #059669;
+      color: #fff;
+      font-size: 1.8rem;
+      font-weight: 900;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .sp-ready-btn:active { opacity: .85; }
+
+    /* ─── done section ───────────────────────────────────────────────────── */
+    #done-section .cards { gap: 8px; }
+    .sp-done {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,.7);
+      border: 1.5px solid #d1d5db;
+      border-radius: 12px;
+      padding: 8px 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #6b7280;
+    }
+    .sp-undo-btn {
+      min-height: 44px;
+      min-width: 64px;
+      border: 2px solid #9ca3af;
+      border-radius: 10px;
+      background: #fff;
+      font-size: 1rem;
+      font-weight: 800;
+      color: #374151;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<header id="spreads-header">
+  <span class="spreads-title-text">🥖 עמדת ממרחים</span>
+  <span id="current-time">--:--</span>
+  <div id="conn-wrap">
+    <span id="conn-dot"></span>
+    <span id="conn-text">מתחבר…</span>
+  </div>
+</header>
+
+<main id="spreads-main">
+
+  <section>
+    <div id="active-cards" class="cards"></div>
+  </section>
+
+  <!-- Scheduled form orders more than 10 min away (same rule as the fryer) -->
+  <section id="upcoming-section" style="display:none">
+    <div class="section-title">📅 הזמנות מראש — עוד 10+ דקות</div>
+    <div id="upcoming-cards" class="cards"></div>
+  </section>
+
+  <section id="done-section" style="display:none">
+    <div class="section-title">✓ הושלם</div>
+    <div id="done-cards" class="cards"></div>
+  </section>
+
+</main>
+
+<script src="js/menu.js"></script>
+<script src="js/api.js"></script>
+<script src="js/local-db.js"></script>
+<script src="js/spreads.js"></script>
+</body>
+</html>

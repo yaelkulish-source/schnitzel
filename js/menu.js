@@ -1,11 +1,13 @@
 // Single source of truth for all menu items, prices, and spread rules.
 // Imported by reception.html, fryer.html, and form.html.
+// hasSpreads    → per-unit picker with all spreads (main + ketchup/mayo).
+// hasCondiments → per-unit "רטבים" picker with ketchup/mayo only.
 
 const MENU = {
   food: [
-    { id: 'chips',                   emoji: '🍟',      name: "צ'יפס",                   price: 10, hasSpreads: false },
-    { id: 'schnitzelons',            emoji: '🍗',      name: 'שניצלונים',                 price: 25, hasSpreads: false },
-    { id: 'schnitzelons_chips',      emoji: '🍗🍟',   name: "שניצלונים + צ'יפס",        price: 30, hasSpreads: false },
+    { id: 'chips',                   emoji: '🍟',      name: "צ'יפס",                   price: 10, hasSpreads: false, hasCondiments: true },
+    { id: 'schnitzelons',            emoji: '🍗',      name: 'שניצלונים',                 price: 25, hasSpreads: false, hasCondiments: true },
+    { id: 'schnitzelons_chips',      emoji: '🍗🍟',   name: "שניצלונים + צ'יפס",        price: 30, hasSpreads: false, hasCondiments: true },
     { id: 'schnitzel_challah',       emoji: '🍗🥖',   name: 'שניצל בחלה',               price: 35, hasSpreads: true  },
   ],
   drinks: [
@@ -26,8 +28,8 @@ MENU.byId = Object.fromEntries(MENU.allItems.map(item => [item.id, item]));
 const EVENT_MENU = {
   food: [
     { id: 'event_schnitzel_challah', emoji: '🍗🥖', name: 'שניצל בחלה', price: 25, hasSpreads: true,  stock: 80 },
-    { id: 'event_schnitzelons',      emoji: '🍗',   name: 'שניצלונים',   price: 20, hasSpreads: false, stock: 33 },
-    { id: 'event_chips',             emoji: '🍟',   name: "צ'יפס",       price: 10, hasSpreads: false },
+    { id: 'event_schnitzelons',      emoji: '🍗',   name: 'שניצלונים',   price: 20, hasSpreads: false, hasCondiments: true, stock: 33 },
+    { id: 'event_chips',             emoji: '🍟',   name: "צ'יפס",       price: 10, hasSpreads: false, hasCondiments: true },
   ],
   drinks: [
     { id: 'event_tropical', emoji: '🧃', name: 'טרופית', price: 3,  hasSpreads: false },
