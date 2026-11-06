@@ -9,6 +9,7 @@ const state = {
   tab:          'active',
   historyDates: [],
   historyDate:  null,
+  historyOrders: [], // orders of the history day being viewed (for payment verification)
   boothOpen:    false,
   demoMode:     false,
   eventMode:    false,
@@ -600,7 +601,7 @@ function renderAll() {
     renderOrderGrid('orders-list', sortedActive(), 'active');
     renderUpcomingSection();
   }
-  if (state.tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), 'completed');
+  if (state.tab === 'completed') renderVerify('today');
   updateCompletedBadge();
 }
 
@@ -873,7 +874,7 @@ function switchTab(tab) {
   document.getElementById('form-panel').style.display = tab === 'active' ? '' : 'none';
   document.getElementById('main-layout').classList.toggle('form-hidden', tab !== 'active');
 
-  if (tab === 'completed') renderOrderGrid('completed-list', state.orders.filter(o => o.status === 'done'), 'completed');
+  if (tab === 'completed') renderVerify('today');
   if (tab === 'history')   loadHistoryDates();
 }
 
@@ -908,19 +909,36 @@ async function loadHistoryDay(date) {
 
   const contentEl = document.getElementById('history-content');
   contentEl.innerHTML = '<div class="empty-state">טוען…</div>';
+  state.historyOrders = [];
 
   try {
     const [orders, summary] = await Promise.all([
       api.get(`/api/orders?date=${date}`),
       api.get(`/api/orders/summary?date=${date}`),
     ]);
-
-    const itemRows = Object.entries(summary.item_counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, n]) => `<div class="summary-row"><span>${esc(name)}</span><span>×${n}</span></div>`)
-      .join('');
+    if (state.historyDate !== date) return; // another day was picked meanwhile
+    state.historyOrders = orders;
 
     contentEl.innerHTML = `
+      <div id="history-summary-box">${buildHistorySummary(date, summary)}</div>
+      <div id="history-verify"></div>
+      <div class="vf-section-title">כל ההזמנות</div>
+      <div class="orders-grid" id="history-orders"></div>`;
+
+    renderVerify('history');
+    renderOrderGrid('history-orders', orders, 'history');
+  } catch {
+    contentEl.innerHTML = '<div class="empty-state">שגיאה בטעינת יום</div>';
+  }
+}
+
+function buildHistorySummary(date, summary) {
+  const itemRows = Object.entries(summary.item_counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => `<div class="summary-row"><span>${esc(name)}</span><span>×${n}</span></div>`)
+    .join('');
+
+  return `
       <div class="history-summary">
         <h3>${formatDateHe(date)}</h3>
         <div class="summary-row"><span>סה"כ הזמנות</span><strong>${summary.total_orders}</strong></div>
@@ -931,13 +949,175 @@ async function loadHistoryDay(date) {
         <div class="summary-row"><span>ממתין לתשלום</span><span>${summary.revenue.pending}₪</span></div>
         ${itemRows ? `<div style="margin-top:10px">${itemRows}</div>` : ''}
         ${buildEventSummary(summary.event)}
-      </div>
-      <div class="orders-grid" id="history-orders"></div>`;
+      </div>`;
+}
 
-    renderOrderGrid('history-orders', orders, 'history');
-  } catch {
-    contentEl.innerHTML = '<div class="empty-state">שגיאה בטעינת יום</div>';
+// Live update of the history day being viewed (another tablet changed an order).
+function applyHistoryOrderUpdate(order) {
+  const i = state.historyOrders.findIndex(o => o.id === order.id);
+  if (i < 0) return;
+  state.historyOrders[i] = order;
+  if (state.tab !== 'history') return;
+  renderVerify('history');
+  renderOrderGrid('history-orders', state.historyOrders, 'history');
+  const date = state.historyDate;
+  api.get(`/api/orders/summary?date=${date}`).then(summary => {
+    const box = document.getElementById('history-summary-box');
+    if (box && state.historyDate === date) box.innerHTML = buildHistorySummary(date, summary);
+  }).catch(() => {});
+}
+
+// ─── payment verification (completed tab + history day) ──────────────────────
+// Each completed order can be marked "התקבל" after checking it against Bit,
+// PayBox and the cash drawer. Stored on the order (paymentConfirmed), synced
+// via the usual order:updated broadcast. Orders without the field = not verified.
+
+const VF_METHODS = ['cash', 'bit', 'paybox', 'pending'];
+const VF_LABEL   = { cash: 'מזומן', bit: 'ביט', paybox: 'PayBox', pending: 'אחר כך' };
+
+const verifyUI = { filter: 'all', search: '', verifiedOpen: false };
+
+function vfMethod(order) {
+  return order.paid ? order.payment_method : 'pending';
+}
+
+function vfTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function vfRootId(scope) {
+  return scope === 'today' ? 'completed-list' : 'history-verify';
+}
+
+function vfOrders(scope) {
+  const orders = scope === 'today' ? state.orders : state.historyOrders;
+  return orders.filter(o => o.status === 'done');
+}
+
+function renderVerifyCurrent() {
+  if (state.tab === 'completed') renderVerify('today');
+  if (state.tab === 'history')   renderVerify('history');
+}
+
+function setVerifyFilter(filter) {
+  verifyUI.filter = filter;
+  renderVerifyCurrent();
+}
+
+function setVerifySearch(text) {
+  verifyUI.search = text;
+  renderVerifyCurrent();
+}
+
+async function togglePaymentConfirmed(id, confirmed) {
+  try {
+    await api.patch(`/api/orders/${id}`, { paymentConfirmed: confirmed });
+    // Row moves on all tablets via the WebSocket order:updated broadcast.
+  } catch { alert('שגיאה בעדכון אימות תשלום'); }
+}
+
+function renderVerify(scope) {
+  const root = document.getElementById(vfRootId(scope));
+  if (!root) return;
+
+  // Static parts (chips + search box) are built once so typing keeps focus.
+  if (!root.querySelector('.vf-toolbar')) {
+    root.innerHTML = `
+      <div class="vf-summary"></div>
+      <div class="vf-toolbar">
+        <div class="vf-chips">
+          ${['all', ...VF_METHODS].map(f => `
+            <button class="vf-chip" data-filter="${f}" onclick="setVerifyFilter('${f}')">${f === 'all' ? 'הכל' : VF_LABEL[f]}</button>`).join('')}
+        </div>
+        <input type="search" class="vf-search" placeholder="🔍 חיפוש לפי שם" autocomplete="off" oninput="setVerifySearch(this.value)">
+      </div>
+      <div class="vf-list vf-todo"></div>
+      <details class="vf-verified" ontoggle="verifyUI.verifiedOpen = this.open">
+        <summary class="vf-verified-title"></summary>
+        <div class="vf-list vf-done"></div>
+      </details>`;
   }
+
+  const all = vfOrders(scope);
+  root.querySelector('.vf-summary').innerHTML = buildVerifySummary(all);
+
+  root.querySelectorAll('.vf-chip').forEach(c =>
+    c.classList.toggle('active', c.dataset.filter === verifyUI.filter));
+  const input = root.querySelector('.vf-search');
+  if (input !== document.activeElement && input.value !== verifyUI.search) input.value = verifyUI.search;
+
+  const q = verifyUI.search.trim().toLowerCase();
+  const shown = all
+    .filter(o => verifyUI.filter === 'all' || vfMethod(o) === verifyUI.filter)
+    .filter(o => !q || String(o.name).toLowerCase().includes(q))
+    .sort((a, b) => a.id - b.id);
+  const todo = shown.filter(o => !o.paymentConfirmed);
+  const done = shown.filter(o =>  o.paymentConfirmed);
+
+  root.querySelector('.vf-todo').innerHTML = todo.length
+    ? todo.map(o => buildVerifyRow(o, scope)).join('')
+    : `<div class="empty-state">${all.length ? 'אין הזמנות לאימות' : 'אין הזמנות שהושלמו'}</div>`;
+
+  const details = root.querySelector('.vf-verified');
+  details.open = verifyUI.verifiedOpen;
+  root.querySelector('.vf-verified-title').textContent = `✓ אומתו (${done.length})`;
+  root.querySelector('.vf-done').innerHTML = done.map(o => buildVerifyRow(o, scope)).join('');
+}
+
+function buildVerifySummary(orders) {
+  const sum = list => list.reduce((s, o) => s + o.total, 0);
+  const verified = orders.filter(o =>  o.paymentConfirmed);
+  const todo     = orders.filter(o => !o.paymentConfirmed);
+
+  const methodRows = VF_METHODS.map(m => {
+    const list = orders.filter(o => vfMethod(o) === m);
+    const ok   = list.filter(o => o.paymentConfirmed).length;
+    return `
+      <div class="vf-method-sum${m === 'pending' && list.length ? ' vf-unpaid' : ''}">
+        <span class="vf-method-name">${VF_LABEL[m]}</span>
+        <strong>${sum(list)}₪</strong>
+        <small>${list.length} הזמנות · אומתו ${ok}</small>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="vf-totals">
+      <div class="vf-total-box vf-total-ok"><span>אומת</span><strong>${sum(verified)}₪</strong><small>${verified.length} הזמנות</small></div>
+      <div class="vf-total-box vf-total-todo"><span>נשאר לאמת</span><strong>${sum(todo)}₪</strong><small>${todo.length} הזמנות</small></div>
+    </div>
+    <div class="vf-methods-sum">${methodRows}</div>`;
+}
+
+function buildVerifyRow(order, scope) {
+  const method    = vfMethod(order);
+  const confirmed = !!order.paymentConfirmed;
+  const rowClass  = ['vf-row',
+    method === 'pending' ? 'vf-unpaid'    : '',
+    confirmed            ? 'vf-confirmed' : '',
+  ].filter(Boolean).join(' ');
+
+  return `
+    <div class="${rowClass}"${scope === 'today' ? ` id="card-${order.id}"` : ''}>
+      <div class="vf-row-top">
+        <span class="vf-num">#${order.id}</span>
+        <span class="vf-name">${esc(order.name)}</span>
+        <span class="vf-time">${vfTime(order.created_at)}</span>
+        <span class="vf-amount">${order.total}₪</span>
+      </div>
+      <div class="vf-row-actions">
+        <div class="vf-method-btns">
+          ${VF_METHODS.map(m => `
+            <button class="vf-method-btn${method === m ? ' active' : ''}" data-pay="${m}"
+              ${method === m ? 'disabled' : `onclick="changePayment(${order.id},'${m}')"`}>${VF_LABEL[m]}</button>`).join('')}
+        </div>
+        <button class="vf-confirm-btn${confirmed ? ' on' : ''}" onclick="togglePaymentConfirmed(${order.id}, ${!confirmed})">
+          ${confirmed ? `✓ התקבל <small>${vfTime(order.paymentConfirmedAt)}</small>` : '✓ התקבל'}
+        </button>
+        ${scope === 'today' ? `<button class="delete-order-btn vf-delete-btn" onclick="deleteOrder(${order.id},'${esc(order.name)}')">🗑 מחק</button>` : ''}
+      </div>
+    </div>`;
 }
 
 // ─── daily summary modal ──────────────────────────────────────────────────────
@@ -1083,6 +1263,7 @@ async function init() {
   });
 
   ws.on('order:updated', order => {
+    if (order.date === state.historyDate) applyHistoryOrderUpdate(order);
     if (order.date !== TODAY) return;
     const i = state.orders.findIndex(o => o.id === order.id);
     if (i >= 0) state.orders[i] = order; else state.orders.push(order);
@@ -1092,6 +1273,10 @@ async function init() {
 
   ws.on('order:deleted', ({ id }) => {
     state.orders = state.orders.filter(o => o.id !== id);
+    if (state.historyOrders.some(o => o.id === id)) {
+      state.historyOrders = state.historyOrders.filter(o => o.id !== id);
+      if (state.tab === 'history') renderVerify('history');
+    }
     if (edit.orderId === id) closeEditModal();
     renderAll();
   });
