@@ -141,6 +141,10 @@ body {
 }
 
 #main-layout.form-hidden { grid-template-columns: 1fr; }
+/* Tab panels: switchTab() toggles .hidden — only the selected tab is shown. */
+#active-tab-content.hidden,
+#completed-tab-content.hidden,
+#history-tab-content.hidden { display: none; }
 
 /* ─── form panel (right) ────────────────────────────────────────────────────── */
 #form-panel {
