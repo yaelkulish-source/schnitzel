@@ -32,7 +32,7 @@ function createDemoOrder(data) {
 function updateDemoOrder(id, changes) {
   const order = demoOrders.get(id);
   if (!order) return null;
-  const MUTABLE = new Set(['status', 'payment_method', 'paid', 'note', 'items', 'total']);
+  const MUTABLE = new Set(['status', 'payment_method', 'paid', 'note', 'items', 'total', 'paymentConfirmed', 'paymentConfirmedAt']);
   for (const [k, v] of Object.entries(changes)) {
     if (MUTABLE.has(k)) order[k] = v;
   }

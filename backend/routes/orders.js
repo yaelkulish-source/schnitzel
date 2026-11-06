@@ -90,6 +90,16 @@ router.patch('/:id', asyncHandler(async (req, res) => {
     changes.total = items.reduce((sum, it) => sum + it.price * it.quantity, 0);
   }
 
+  // Payment verification: the timestamp is always set by the server.
+  // Orders without the field are treated as not verified.
+  delete changes.paymentConfirmedAt;
+  if (changes.paymentConfirmed !== undefined) {
+    if (typeof changes.paymentConfirmed !== 'boolean') {
+      return res.status(400).json({ error: 'paymentConfirmed must be boolean' });
+    }
+    changes.paymentConfirmedAt = changes.paymentConfirmed ? new Date().toISOString() : null;
+  }
+
   const demoOrder = demoStore.getDemoOrderById(id);
   if (demoOrder) {
     const order = demoStore.updateDemoOrder(id, changes);

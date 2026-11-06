@@ -70,7 +70,7 @@ async function createOrder(data) {
 }
 
 // Allowed mutable fields — guards against mass-assignment
-const MUTABLE = new Set(['status', 'payment_method', 'paid', 'note', 'items', 'total']);
+const MUTABLE = new Set(['status', 'payment_method', 'paid', 'note', 'items', 'total', 'paymentConfirmed', 'paymentConfirmedAt']);
 
 async function updateOrder(id, changes) {
   const $set = {};
