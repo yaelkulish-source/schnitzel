@@ -765,14 +765,32 @@ function updateCompletedBadge() {
 
 // ─── upcoming orders section ──────────────────────────────────────────────────
 
+function preorderCountLabel(n) {
+  return n === 1 ? 'הזמנה מראש אחת' : `${n} הזמנות מראש`;
+}
+
+// Shown whenever there are pre-orders (also in event mode), with a count badge
+// here and a chip in the toolbar that is visible from every tab.
 function renderUpcomingSection() {
   const section = document.getElementById('upcoming-section');
   const list    = document.getElementById('upcoming-list');
   if (!section || !list) return;
   const orders  = sortedUpcoming();
-  section.classList.toggle('hidden', orders.length === 0);
-  section.style.display = state.eventMode ? 'none' : '';
+  section.style.display = orders.length ? '' : 'none';
+  const count = document.getElementById('upcoming-count');
+  if (count) count.textContent = preorderCountLabel(orders.length);
   list.innerHTML = orders.map(buildUpcomingCard).join('');
+
+  const chip = document.getElementById('preorder-chip');
+  if (chip) {
+    chip.style.display = orders.length ? '' : 'none';
+    chip.textContent = `📅 ${preorderCountLabel(orders.length)}`;
+  }
+}
+
+function goToPreorders() {
+  switchTab('active');
+  document.getElementById('upcoming-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function buildUpcomingCard(order) {
@@ -786,9 +804,9 @@ function buildUpcomingCard(order) {
         <span class="order-num">#${order.id}</span>
         <span class="order-name">${esc(order.name)}</span>
         <span class="order-source wa">ווצאפ</span>
-        <span class="upcoming-badge">📅 ${order.pickup_time}</span>
         <button class="edit-order-btn" onclick="openEditModal(${order.id})">✏️ ערוך</button>
       </div>
+      <div class="upcoming-pickup">🕐 איסוף ${esc(order.pickup_time)}</div>
       <div class="card-items">${itemsHtml}</div>
       <div class="card-meta">
         <span class="meta-total">${order.total}₪</span>
@@ -796,6 +814,71 @@ function buildUpcomingCard(order) {
         ${order.note ? `<span class="meta-note">💬 ${esc(order.note)}</span>` : ''}
       </div>
     </div>`;
+}
+
+// ─── new form order banner + sound ────────────────────────────────────────────
+// Every new form order (incl. scheduled pre-orders) shows a banner at the top
+// of the screen until it is tapped, with a short chime (repeated every 30s
+// while a banner is still open).
+
+const formBanners = new Set(); // order ids with an open banner
+let bannerChimeTimer = null;
+
+let audioCtx = null;
+
+// Browsers only allow sound after a tap on the page; reception gets taps all the time.
+function unlockAudio() {
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { console.warn('Audio:', e.message); }
+}
+
+function playChime() {
+  unlockAudio();
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime;
+  [880, 1175, 1568].forEach((freq, i) => {
+    const t   = t0 + i * 0.16;
+    const osc = audioCtx.createOscillator();
+    const amp = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    osc.connect(amp).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.45);
+  });
+}
+
+function showFormOrderBanner(order) {
+  if (formBanners.has(order.id)) return;
+  formBanners.add(order.id);
+  const container = document.getElementById('form-order-banners');
+  if (!container) return;
+
+  const pre  = isUpcoming(order) ? ' · הזמנה מראש' : '';
+  const day  = order.date && order.date !== TODAY ? ` (${formatDateHe(order.date)})` : '';
+  const el   = document.createElement('button');
+  el.className = 'form-order-banner';
+  el.id        = `fbanner-${order.id}`;
+  el.innerHTML = `<span>📥 הזמנה חדשה מהטופס: <strong>${esc(order.name)}</strong>, איסוף <strong>${esc(order.pickup_time || 'בהקדם')}</strong>${day}${pre}</span><span class="fbanner-hint">#${order.id} · הקישו לסגירה</span>`;
+  el.addEventListener('click', () => dismissFormBanner(order.id));
+  container.appendChild(el);
+
+  playChime();
+  if (!bannerChimeTimer) bannerChimeTimer = setInterval(playChime, 30000);
+}
+
+function dismissFormBanner(id) {
+  formBanners.delete(id);
+  document.getElementById(`fbanner-${id}`)?.remove();
+  if (!formBanners.size && bannerChimeTimer) {
+    clearInterval(bannerChimeTimer);
+    bannerChimeTimer = null;
+  }
 }
 
 // ─── scheduled alerts ─────────────────────────────────────────────────────────
@@ -1339,6 +1422,9 @@ async function init() {
     if (e.key === 'Escape' && details.id !== null) closeOrderDetails();
   });
 
+  document.getElementById('preorder-chip').addEventListener('click', goToPreorders);
+  document.addEventListener('pointerdown', unlockAudio, { passive: true });
+
   document.querySelectorAll('.tab-btn').forEach(btn =>
     btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
@@ -1372,6 +1458,7 @@ async function init() {
 
   // WebSocket: live updates
   ws.on('order:created', order => {
+    if (order.source === 'whatsapp_form') showFormOrderBanner(order);
     if (order.date !== TODAY) return;
     state.orders.push(order);
     localDB.put(order);
