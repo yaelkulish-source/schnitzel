@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- Installable home-screen app (no service worker: always loads the latest files) -->
+  <link rel="manifest" href="manifest-reception.json">
+  <meta name="theme-color" content="#1e3a5f">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/reception-192.png">
+  <link rel="apple-touch-icon" href="icons/reception-apple-touch.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="קבלה">
   <title>קבלה — דוכן שניצלים</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -30,6 +38,7 @@
   <button class="tab-btn active" data-tab="active">פעיל</button>
   <button class="tab-btn" data-tab="completed">הושלם <span id="completed-count"></span></button>
   <button class="tab-btn" data-tab="history">היסטוריה</button>
+  <button id="preorder-chip" class="preorder-chip" style="display:none"></button>
   <div id="toolbar-actions">
     <button class="btn booth-toggle event-off" id="event-toggle-btn">🎪 מצב אירוע: כבוי</button>
     <button class="btn booth-toggle booth-closed" id="booth-toggle-btn">🔴 דוכן סגור</button>
@@ -37,6 +46,9 @@
     <button class="btn btn-primary"   id="summary-btn">📊 סיכום יום</button>
   </div>
 </div>
+
+<!-- ─── New form order banners (fixed at the top until tapped) ──────────────── -->
+<div id="form-order-banners"></div>
 
 <!-- ─── Event counter (visible only in event mode) ──────────────────────────── -->
 <div id="event-counter" class="hidden"></div>
@@ -81,8 +93,8 @@
     <div id="active-tab-content">
       <div id="scheduled-alerts"></div>
       <div class="orders-grid" id="orders-list"></div>
-      <div id="upcoming-section" class="hidden">
-        <div class="upcoming-header">📅 הזמנות מראש — ממתינות</div>
+      <div id="upcoming-section" style="display:none">
+        <div class="upcoming-header">📅 הזמנות מראש — ממתינות <span id="upcoming-count" class="upcoming-count"></span></div>
         <div class="orders-grid" id="upcoming-list"></div>
       </div>
     </div>
@@ -127,6 +139,18 @@
     <div class="section-label">הוספת פריט</div>
     <div class="menu-grid" id="edit-menu-grid"></div>
     <button class="btn btn-primary" id="edit-save-btn" onclick="saveEdit()">💾 שמור</button>
+  </div>
+</div>
+
+<!-- ─── Order Details Modal (read-only) ─────────────────────────────────────── -->
+<div id="details-modal" class="modal-backdrop hidden">
+  <div class="modal details-modal">
+    <div class="modal-header">
+      <h2 id="details-title">פרטי הזמנה</h2>
+      <button class="modal-close" onclick="closeOrderDetails()">✕</button>
+    </div>
+    <div id="details-content"></div>
+    <button class="btn btn-secondary details-close-btn" onclick="closeOrderDetails()">סגור</button>
   </div>
 </div>
 

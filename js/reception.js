@@ -213,7 +213,7 @@ async function submitOrder() {
     cartReset();
     // Card appears via the WebSocket order:created broadcast.
   } catch (e) {
-    alert('שגיאה בשמירת הזמנה: ' + e.message);
+    showActionError('שגיאה בשמירת הזמנה', e);
     refreshSubmitBtn();
   } finally {
     btn.textContent = '➕ הוסף הזמנה';
@@ -229,7 +229,7 @@ async function changeStatus(id, status) {
   }
   try {
     await api.patch(`/api/orders/${id}`, { status });
-  } catch { alert('שגיאה בעדכון סטטוס'); }
+  } catch (e) { showActionError('שגיאה בעדכון סטטוס', e); }
 }
 
 async function changePayment(id, method) {
@@ -238,7 +238,7 @@ async function changePayment(id, method) {
       payment_method: method,
       paid: method !== 'pending',
     });
-  } catch { alert('שגיאה בעדכון תשלום'); }
+  } catch (e) { showActionError('שגיאה בעדכון תשלום', e); }
 }
 
 function sendWhatsAppUpdate(id) {
@@ -263,7 +263,7 @@ async function cancelOrder(id, name) {
   if (!confirm(`לבטל את הזמנה #${id} של ${name}?`)) return;
   try {
     await api.patch(`/api/orders/${id}`, { status: 'cancelled' });
-  } catch { alert('שגיאה בביטול הזמנה'); }
+  } catch (e) { showActionError('שגיאה בביטול הזמנה', e); }
 }
 
 async function deleteOrder(id, name) {
@@ -276,7 +276,7 @@ async function deleteOrder(id, name) {
     await api.delete(`/api/orders/${id}`);
     // Card is removed via the WebSocket order:deleted broadcast.
   } catch (e) {
-    alert('שגיאה במחיקת הזמנה: ' + e.message);
+    showActionError('שגיאה במחיקת הזמנה', e);
     if (btn) { btn.disabled = false; btn.textContent = '🗑 מחק'; }
   }
 }
@@ -288,7 +288,7 @@ async function clearCompleted() {
   if (!confirm('אישור סופי: המחיקה אינה הפיכה. להמשיך?')) return;
   try {
     await api.delete(`/api/orders/completed?date=${TODAY}`);
-  } catch { alert('שגיאה בניקוי הזמנות'); }
+  } catch (e) { showActionError('שגיאה בניקוי הזמנות', e); }
 }
 
 // ─── edit order modal ─────────────────────────────────────────────────────────
@@ -379,7 +379,7 @@ async function saveEdit() {
     closeEditModal();
     // Card updates on all screens via the WebSocket order:updated broadcast.
   } catch (e) {
-    alert('שגיאה בשמירת השינויים: ' + e.message);
+    showActionError('שגיאה בשמירת השינויים', e);
     btn.disabled = false;
   } finally {
     btn.textContent = '💾 שמור';
@@ -408,7 +408,7 @@ async function collectWithPayment(method) {
     } else {
       await api.patch(`/api/orders/${id}`, { status: 'done', paid: true, payment_method: method });
     }
-  } catch { alert('שגיאה בעדכון הזמנה'); }
+  } catch (e) { showActionError('שגיאה בעדכון הזמנה', e); }
 }
 
 // ─── booth toggle ─────────────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ async function toggleBooth() {
   } else if (state.boothOpen) {
     try {
       await api.patch('/api/booth', { open: false });
-    } catch { alert('שגיאה בעדכון מצב הדוכן'); }
+    } catch (e) { showActionError('שגיאה בעדכון מצב הדוכן', e); }
   } else {
     showBoothOpenModal();
   }
@@ -461,7 +461,7 @@ async function openBoothReal() {
   closeBoothHoursModal();
   try {
     await api.patch('/api/booth', { open: true, open_time: openTime, close_time: closeTime });
-  } catch { alert('שגיאה בפתיחת הדוכן'); }
+  } catch (e) { showActionError('שגיאה בפתיחת הדוכן', e); }
 }
 
 function renderDemoBanner() {
@@ -507,7 +507,7 @@ async function toggleEventMode() {
   try {
     await api.patch('/api/event', { active: turnOn });
     // All screens (including this one) switch via the event:updated broadcast.
-  } catch { alert('שגיאה בעדכון מצב אירוע'); }
+  } catch (e) { showActionError('שגיאה בעדכון מצב אירוע', e); }
 }
 
 function applyEventMode({ active, name }) {
@@ -603,6 +603,7 @@ function renderAll() {
   }
   if (state.tab === 'completed') renderVerify('today');
   updateCompletedBadge();
+  refreshOrderDetails();
 }
 
 function renderStats() {
@@ -737,7 +738,7 @@ function buildCard(order, mode) {
     : '';
 
   return `
-    <div class="${cardClass}" id="card-${order.id}">
+    <div class="${cardClass}" id="card-${order.id}" data-oid="${order.id}" data-oscope="${mode === 'history' ? 'history' : 'today'}">
       <div class="card-header">
         <span class="order-num">#${order.id}</span>
         <span class="order-name">${esc(order.name)}</span>
@@ -764,14 +765,32 @@ function updateCompletedBadge() {
 
 // ─── upcoming orders section ──────────────────────────────────────────────────
 
+function preorderCountLabel(n) {
+  return n === 1 ? 'הזמנה מראש אחת' : `${n} הזמנות מראש`;
+}
+
+// Shown whenever there are pre-orders (also in event mode), with a count badge
+// here and a chip in the toolbar that is visible from every tab.
 function renderUpcomingSection() {
   const section = document.getElementById('upcoming-section');
   const list    = document.getElementById('upcoming-list');
   if (!section || !list) return;
   const orders  = sortedUpcoming();
-  section.classList.toggle('hidden', orders.length === 0);
-  section.style.display = state.eventMode ? 'none' : '';
+  section.style.display = orders.length ? '' : 'none';
+  const count = document.getElementById('upcoming-count');
+  if (count) count.textContent = preorderCountLabel(orders.length);
   list.innerHTML = orders.map(buildUpcomingCard).join('');
+
+  const chip = document.getElementById('preorder-chip');
+  if (chip) {
+    chip.style.display = orders.length ? '' : 'none';
+    chip.textContent = `📅 ${preorderCountLabel(orders.length)}`;
+  }
+}
+
+function goToPreorders() {
+  switchTab('active');
+  document.getElementById('upcoming-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function buildUpcomingCard(order) {
@@ -780,14 +799,14 @@ function buildUpcomingCard(order) {
     `<div class="card-item">${item.quantity}× ${esc(item.menu_item)}</div>`
   ).join('');
   return `
-    <div class="order-card upcoming-card" id="card-${order.id}">
+    <div class="order-card upcoming-card" id="card-${order.id}" data-oid="${order.id}" data-oscope="today">
       <div class="card-header">
         <span class="order-num">#${order.id}</span>
         <span class="order-name">${esc(order.name)}</span>
         <span class="order-source wa">ווצאפ</span>
-        <span class="upcoming-badge">📅 ${order.pickup_time}</span>
         <button class="edit-order-btn" onclick="openEditModal(${order.id})">✏️ ערוך</button>
       </div>
+      <div class="upcoming-pickup">🕐 איסוף ${esc(order.pickup_time)}</div>
       <div class="card-items">${itemsHtml}</div>
       <div class="card-meta">
         <span class="meta-total">${order.total}₪</span>
@@ -795,6 +814,71 @@ function buildUpcomingCard(order) {
         ${order.note ? `<span class="meta-note">💬 ${esc(order.note)}</span>` : ''}
       </div>
     </div>`;
+}
+
+// ─── new form order banner + sound ────────────────────────────────────────────
+// Every new form order (incl. scheduled pre-orders) shows a banner at the top
+// of the screen until it is tapped, with a short chime (repeated every 30s
+// while a banner is still open).
+
+const formBanners = new Set(); // order ids with an open banner
+let bannerChimeTimer = null;
+
+let audioCtx = null;
+
+// Browsers only allow sound after a tap on the page; reception gets taps all the time.
+function unlockAudio() {
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { console.warn('Audio:', e.message); }
+}
+
+function playChime() {
+  unlockAudio();
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime;
+  [880, 1175, 1568].forEach((freq, i) => {
+    const t   = t0 + i * 0.16;
+    const osc = audioCtx.createOscillator();
+    const amp = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    osc.connect(amp).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.45);
+  });
+}
+
+function showFormOrderBanner(order) {
+  if (formBanners.has(order.id)) return;
+  formBanners.add(order.id);
+  const container = document.getElementById('form-order-banners');
+  if (!container) return;
+
+  const pre  = isUpcoming(order) ? ' · הזמנה מראש' : '';
+  const day  = order.date && order.date !== TODAY ? ` (${formatDateHe(order.date)})` : '';
+  const el   = document.createElement('button');
+  el.className = 'form-order-banner';
+  el.id        = `fbanner-${order.id}`;
+  el.innerHTML = `<span>📥 הזמנה חדשה מהטופס: <strong>${esc(order.name)}</strong>, איסוף <strong>${esc(order.pickup_time || 'בהקדם')}</strong>${day}${pre}</span><span class="fbanner-hint">#${order.id} · הקישו לסגירה</span>`;
+  el.addEventListener('click', () => dismissFormBanner(order.id));
+  container.appendChild(el);
+
+  playChime();
+  if (!bannerChimeTimer) bannerChimeTimer = setInterval(playChime, 30000);
+}
+
+function dismissFormBanner(id) {
+  formBanners.delete(id);
+  document.getElementById(`fbanner-${id}`)?.remove();
+  if (!formBanners.size && bannerChimeTimer) {
+    clearInterval(bannerChimeTimer);
+    bannerChimeTimer = null;
+  }
 }
 
 // ─── scheduled alerts ─────────────────────────────────────────────────────────
@@ -957,6 +1041,7 @@ function applyHistoryOrderUpdate(order) {
   const i = state.historyOrders.findIndex(o => o.id === order.id);
   if (i < 0) return;
   state.historyOrders[i] = order;
+  refreshOrderDetails();
   if (state.tab !== 'history') return;
   renderVerify('history');
   renderOrderGrid('history-orders', state.historyOrders, 'history');
@@ -1015,7 +1100,7 @@ async function togglePaymentConfirmed(id, confirmed) {
   try {
     await api.patch(`/api/orders/${id}`, { paymentConfirmed: confirmed });
     // Row moves on all tablets via the WebSocket order:updated broadcast.
-  } catch { alert('שגיאה בעדכון אימות תשלום'); }
+  } catch (e) { showActionError('שגיאה בעדכון אימות תשלום', e); }
 }
 
 function renderVerify(scope) {
@@ -1099,7 +1184,7 @@ function buildVerifyRow(order, scope) {
   ].filter(Boolean).join(' ');
 
   return `
-    <div class="${rowClass}"${scope === 'today' ? ` id="card-${order.id}"` : ''}>
+    <div class="${rowClass}"${scope === 'today' ? ` id="card-${order.id}"` : ''} data-oid="${order.id}" data-oscope="${scope}">
       <div class="vf-row-top">
         <span class="vf-num">#${order.id}</span>
         <span class="vf-name">${esc(order.name)}</span>
@@ -1118,6 +1203,112 @@ function buildVerifyRow(order, scope) {
         ${scope === 'today' ? `<button class="delete-order-btn vf-delete-btn" onclick="deleteOrder(${order.id},'${esc(order.name)}')">🗑 מחק</button>` : ''}
       </div>
     </div>`;
+}
+
+// ─── order details (read-only) ────────────────────────────────────────────────
+// Tapping a card (anywhere except its buttons) opens everything about the order.
+
+const DETAIL_STATUS = { waiting: 'ממתין', cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף', cancelled: 'בוטל' };
+const details = { id: null, scope: 'today' };
+
+function findOrder(id, scope) {
+  const list = scope === 'history' ? state.historyOrders : state.orders;
+  return list.find(o => o.id === id);
+}
+
+function onOrderCardClick(e) {
+  // Buttons, inputs and the button rows (incl. gaps / disabled buttons) keep their own behaviour.
+  if (e.target.closest('button, a, input, select, textarea, summary, label, ' +
+      '.status-buttons, .payment-row, .vf-row-actions')) return;
+  const card = e.target.closest('[data-oid]');
+  if (!card) return;
+  openOrderDetails(Number(card.dataset.oid), card.dataset.oscope);
+}
+
+function openOrderDetails(id, scope = 'today') {
+  if (!findOrder(id, scope)) return;
+  details.id = id;
+  details.scope = scope;
+  renderOrderDetails();
+  document.getElementById('details-modal').classList.remove('hidden');
+}
+
+function closeOrderDetails() {
+  details.id = null;
+  document.getElementById('details-modal').classList.add('hidden');
+}
+
+// Keep an open details view in sync with live updates.
+function refreshOrderDetails() {
+  if (details.id === null) return;
+  if (findOrder(details.id, details.scope)) renderOrderDetails();
+  else closeOrderDetails();
+}
+
+function detailTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const time = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const day  = iso.slice(0, 10);
+  return day === TODAY ? time : `${time} · ${new Intl.DateTimeFormat('he-IL').format(d)}`;
+}
+
+// Per-unit spreads/sauces lines: #1, #2… (handles string[][], old string[] and []).
+function detailUnits(item) {
+  const spreads = item.spreads ?? [];
+  if (!spreads.length) return '';
+  if (!Array.isArray(spreads[0])) {
+    return `<div class="dt-units"><div class="dt-unit">${esc(spreads.join(' · '))}</div></div>`;
+  }
+  const rows = [];
+  for (let i = 0; i < item.quantity; i++) {
+    const unit = spreads[i] ?? [];
+    rows.push(`<div class="dt-unit"><span class="dt-unit-num">#${i + 1}</span>${unit.length ? esc(unit.join(' · ')) : '<span class="dt-none">—</span>'}</div>`);
+  }
+  return `<div class="dt-units">${rows.join('')}</div>`;
+}
+
+function renderOrderDetails() {
+  const order = findOrder(details.id, details.scope);
+  if (!order) return;
+
+  const isWa = order.source === 'whatsapp_form';
+  const row  = (label, value) => value ? `<div class="dt-row"><span class="dt-label">${label}</span><span class="dt-value">${value}</span></div>` : '';
+
+  let payment;
+  if (order.paid) payment = `${esc(PAY_LABEL[order.payment_method] || order.payment_method)} ✓ שולם`;
+  else payment = order.status === 'done' ? '<span class="dt-warn">אחר כך — לא שולם</span>' : 'עדיין לא שולם';
+  const verified = order.paymentConfirmed
+    ? `<span class="dt-ok">✓ אומת ${vfTime(order.paymentConfirmedAt)}</span>`
+    : 'לא אומת';
+
+  const itemsHtml = order.items.map(item => `
+    <div class="dt-item">
+      <div class="dt-item-top">
+        <span class="dt-qty">${item.quantity}×</span>
+        <span class="dt-item-name">${esc(item.menu_item)}</span>
+        <span class="dt-item-price">${item.quantity > 1 ? `${item.price}₪ × ${item.quantity} = ` : ''}${item.price * item.quantity}₪</span>
+      </div>
+      ${detailUnits(item)}
+    </div>`).join('');
+
+  document.getElementById('details-title').textContent = `הזמנה #${order.id} — ${order.name}`;
+  document.getElementById('details-content').innerHTML = `
+    <div class="dt-rows">
+      ${row('שם', esc(order.name))}
+      ${row('טלפון', order.phone ? `<a href="tel:${esc(order.phone)}" dir="ltr">${esc(order.phone)}</a>` : '')}
+      ${row('מקור', isWa ? '📱 טופס' : '🏪 דוכן')}
+      ${row('אירוע', order.event ? `🎪 ${esc(order.event)}` : '')}
+      ${row('נוצרה', detailTime(order.created_at))}
+      ${row('איסוף', order.pickup_time ? `<strong class="dt-pickup">🕐 ${esc(order.pickup_time)}</strong>` : 'בהקדם')}
+      ${row('סטטוס', DETAIL_STATUS[order.status] || esc(order.status))}
+      ${row('תשלום', payment)}
+      ${row('אימות תשלום', verified)}
+    </div>
+    ${order.note ? `<div class="dt-note">💬 ${esc(order.note)}</div>` : ''}
+    <div class="dt-items-title">פריטים</div>
+    <div class="dt-items">${itemsHtml}</div>
+    <div class="dt-total"><span>סה"כ</span><strong>${order.total}₪</strong></div>`;
 }
 
 // ─── daily summary modal ──────────────────────────────────────────────────────
@@ -1174,8 +1365,8 @@ async function showDailySummary() {
       ${buildEventSummary(s.event)}`;
 
     document.getElementById('summary-modal').classList.remove('hidden');
-  } catch {
-    alert('שגיאה בטעינת סיכום');
+  } catch (e) {
+    showActionError('שגיאה בטעינת סיכום', e);
   }
 }
 
@@ -1190,11 +1381,48 @@ function downloadBackup() {
   URL.revokeObjectURL(url);
 }
 
-// ─── connection indicator ─────────────────────────────────────────────────────
+// ─── connection indicator + errors ────────────────────────────────────────────
 
 function setConnected(yes) {
   document.getElementById('connection-dot').className    = yes ? 'connected' : '';
   document.getElementById('connection-text').textContent = yes ? 'מחובר' : 'מנותק';
+}
+
+// Non-blocking message instead of an alert popup (api.js `connection`);
+// falls back to alert if an older cached api.js is loaded.
+function showActionError(label, err) {
+  if (typeof connection !== 'undefined') connection.actionFailed(label, err);
+  else { console.error(label, err); alert(label); }
+}
+
+async function loadTodayOrders() {
+  const orders = await api.get(`/api/orders?date=${TODAY}`);
+  state.orders = orders;
+  await localDB.putMany(orders);
+  renderAll();
+}
+
+// Connection is back: reload everything (broadcasts may have been missed).
+async function reloadFromServer() {
+  const knownIds = new Set(state.orders.map(o => o.id));
+  try {
+    const booth = await api.get('/api/booth');
+    if (!state.demoMode) { state.boothOpen = booth.open; renderBoothToggle(); }
+    applyEventMode(await api.get('/api/event'));
+    await loadTodayOrders();
+    // Form orders that arrived while offline still get their banner.
+    if (knownIds.size && typeof showFormOrderBanner === 'function') {
+      state.orders
+        .filter(o => o.source === 'whatsapp_form' && !knownIds.has(o.id))
+        .forEach(showFormOrderBanner);
+    }
+    if (state.tab === 'history') {
+      loadHistoryDates();
+      if (state.historyDate) loadHistoryDay(state.historyDate);
+    }
+  } catch (e) {
+    console.error('Reload after reconnect failed', e);
+  }
 }
 
 // ─── init ─────────────────────────────────────────────────────────────────────
@@ -1223,6 +1451,17 @@ async function init() {
     if (e.target === e.currentTarget) closeEditModal();
   });
 
+  document.getElementById('orders-panel').addEventListener('click', onOrderCardClick);
+  document.getElementById('details-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeOrderDetails();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && details.id !== null) closeOrderDetails();
+  });
+
+  document.getElementById('preorder-chip').addEventListener('click', goToPreorders);
+  document.addEventListener('pointerdown', unlockAudio, { passive: true });
+
   document.querySelectorAll('.tab-btn').forEach(btn =>
     btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
@@ -1246,16 +1485,14 @@ async function init() {
 
   // Fetch authoritative data from server
   try {
-    const orders = await api.get(`/api/orders?date=${TODAY}`);
-    state.orders = orders;
-    await localDB.putMany(orders);
-    renderAll();
-  } catch {
-    console.warn('Server unavailable — showing local cache');
+    await loadTodayOrders();
+  } catch (e) {
+    console.warn('Server unavailable — showing local cache', e);
   }
 
   // WebSocket: live updates
   ws.on('order:created', order => {
+    if (order.source === 'whatsapp_form') showFormOrderBanner(order);
     if (order.date !== TODAY) return;
     state.orders.push(order);
     localDB.put(order);
@@ -1307,8 +1544,12 @@ async function init() {
   // Re-sync event mode after a reconnect in case a broadcast was missed.
   ws.on('_connected', () => api.get('/api/event').then(applyEventMode).catch(() => {}));
 
-  ws.on('_connected',    () => setConnected(true));
-  ws.on('_disconnected', () => setConnected(false));
+  if (typeof connection !== 'undefined') {
+    connection.start({ dotId: 'connection-dot', textId: 'connection-text', onRecover: reloadFromServer });
+  } else {
+    ws.on('_connected',    () => setConnected(true));
+    ws.on('_disconnected', () => setConnected(false));
+  }
   ws.connect();
 
   setInterval(tickTimers, 1000);

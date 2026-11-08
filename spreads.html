@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- Installable home-screen app (no service worker: always loads the latest files) -->
+  <link rel="manifest" href="manifest-spreads.json">
+  <meta name="theme-color" content="#065f46">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/spreads-192.png">
+  <link rel="apple-touch-icon" href="icons/spreads-apple-touch.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="מריחות">
   <title>ממרחים — דוכן שניצלים</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -75,6 +83,17 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.09);
     }
     .sp-card.upcoming { border-style: dashed; opacity: .6; }
+    /* scheduled order inside the prep window (PREP_LEAD_MINUTES) */
+    .sp-card.prep { border: 4px solid #7c3aed; background: #f5f3ff; }
+    .sp-prep-now {
+      margin: -16px -16px 0;
+      padding: 10px 14px;
+      border-radius: 12px 12px 0 0;
+      background: #7c3aed;
+      color: #fff;
+      font-size: 1.35rem;
+      font-weight: 900;
+    }
 
     .sp-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
     .sp-num  { font-size: 1.4rem; font-weight: 900; color: #065f46; }
@@ -163,9 +182,9 @@
     <div id="active-cards" class="cards"></div>
   </section>
 
-  <!-- Scheduled form orders more than 10 min away (same rule as the fryer) -->
+  <!-- Scheduled form orders more than PREP_LEAD_MINUTES away (same rule as the fryer) -->
   <section id="upcoming-section" style="display:none">
-    <div class="section-title">📅 הזמנות מראש — עוד 10+ דקות</div>
+    <div class="section-title" id="upcoming-title">📅 הזמנות מראש</div>
     <div id="upcoming-cards" class="cards"></div>
   </section>
 
