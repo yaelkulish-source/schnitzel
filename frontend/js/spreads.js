@@ -217,6 +217,13 @@ function setConnected(yes) {
   document.getElementById('conn-text').textContent = yes ? 'מחובר' : 'מנותק';
 }
 
+async function loadOrders() {
+  const orders = await api.get(`/api/orders?date=${TODAY}`);
+  state.orders = orders;
+  await localDB.putMany(orders);
+  renderAll();
+}
+
 // ─── init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -232,12 +239,9 @@ async function init() {
   } catch { /* IndexedDB unavailable */ }
 
   try {
-    const orders = await api.get(`/api/orders?date=${TODAY}`);
-    state.orders = orders;
-    await localDB.putMany(orders);
-    renderAll();
-  } catch {
-    console.warn('Server unavailable — showing local cache');
+    await loadOrders();
+  } catch (e) {
+    console.warn('Server unavailable — showing local cache', e);
   }
 
   ws.on('order:created', order => {
@@ -273,8 +277,14 @@ async function init() {
     }
   });
 
-  ws.on('_connected',    () => setConnected(true));
-  ws.on('_disconnected', () => setConnected(false));
+  if (typeof connection !== 'undefined') {
+    // Clear "no connection" banner + auto-retry; reload once the server is back.
+    connection.start({ dotId: 'conn-dot', textId: 'conn-text', onRecover: () =>
+      loadOrders().catch(e => console.error('Reload after reconnect failed', e)) });
+  } else {
+    ws.on('_connected',    () => setConnected(true));
+    ws.on('_disconnected', () => setConnected(false));
+  }
   ws.connect();
 
   setInterval(tick, 1000);

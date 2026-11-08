@@ -213,7 +213,7 @@ async function submitOrder() {
     cartReset();
     // Card appears via the WebSocket order:created broadcast.
   } catch (e) {
-    alert('שגיאה בשמירת הזמנה: ' + e.message);
+    showActionError('שגיאה בשמירת הזמנה', e);
     refreshSubmitBtn();
   } finally {
     btn.textContent = '➕ הוסף הזמנה';
@@ -229,7 +229,7 @@ async function changeStatus(id, status) {
   }
   try {
     await api.patch(`/api/orders/${id}`, { status });
-  } catch { alert('שגיאה בעדכון סטטוס'); }
+  } catch (e) { showActionError('שגיאה בעדכון סטטוס', e); }
 }
 
 async function changePayment(id, method) {
@@ -238,7 +238,7 @@ async function changePayment(id, method) {
       payment_method: method,
       paid: method !== 'pending',
     });
-  } catch { alert('שגיאה בעדכון תשלום'); }
+  } catch (e) { showActionError('שגיאה בעדכון תשלום', e); }
 }
 
 function sendWhatsAppUpdate(id) {
@@ -263,7 +263,7 @@ async function cancelOrder(id, name) {
   if (!confirm(`לבטל את הזמנה #${id} של ${name}?`)) return;
   try {
     await api.patch(`/api/orders/${id}`, { status: 'cancelled' });
-  } catch { alert('שגיאה בביטול הזמנה'); }
+  } catch (e) { showActionError('שגיאה בביטול הזמנה', e); }
 }
 
 async function deleteOrder(id, name) {
@@ -276,7 +276,7 @@ async function deleteOrder(id, name) {
     await api.delete(`/api/orders/${id}`);
     // Card is removed via the WebSocket order:deleted broadcast.
   } catch (e) {
-    alert('שגיאה במחיקת הזמנה: ' + e.message);
+    showActionError('שגיאה במחיקת הזמנה', e);
     if (btn) { btn.disabled = false; btn.textContent = '🗑 מחק'; }
   }
 }
@@ -288,7 +288,7 @@ async function clearCompleted() {
   if (!confirm('אישור סופי: המחיקה אינה הפיכה. להמשיך?')) return;
   try {
     await api.delete(`/api/orders/completed?date=${TODAY}`);
-  } catch { alert('שגיאה בניקוי הזמנות'); }
+  } catch (e) { showActionError('שגיאה בניקוי הזמנות', e); }
 }
 
 // ─── edit order modal ─────────────────────────────────────────────────────────
@@ -379,7 +379,7 @@ async function saveEdit() {
     closeEditModal();
     // Card updates on all screens via the WebSocket order:updated broadcast.
   } catch (e) {
-    alert('שגיאה בשמירת השינויים: ' + e.message);
+    showActionError('שגיאה בשמירת השינויים', e);
     btn.disabled = false;
   } finally {
     btn.textContent = '💾 שמור';
@@ -408,7 +408,7 @@ async function collectWithPayment(method) {
     } else {
       await api.patch(`/api/orders/${id}`, { status: 'done', paid: true, payment_method: method });
     }
-  } catch { alert('שגיאה בעדכון הזמנה'); }
+  } catch (e) { showActionError('שגיאה בעדכון הזמנה', e); }
 }
 
 // ─── booth toggle ─────────────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ async function toggleBooth() {
   } else if (state.boothOpen) {
     try {
       await api.patch('/api/booth', { open: false });
-    } catch { alert('שגיאה בעדכון מצב הדוכן'); }
+    } catch (e) { showActionError('שגיאה בעדכון מצב הדוכן', e); }
   } else {
     showBoothOpenModal();
   }
@@ -461,7 +461,7 @@ async function openBoothReal() {
   closeBoothHoursModal();
   try {
     await api.patch('/api/booth', { open: true, open_time: openTime, close_time: closeTime });
-  } catch { alert('שגיאה בפתיחת הדוכן'); }
+  } catch (e) { showActionError('שגיאה בפתיחת הדוכן', e); }
 }
 
 function renderDemoBanner() {
@@ -507,7 +507,7 @@ async function toggleEventMode() {
   try {
     await api.patch('/api/event', { active: turnOn });
     // All screens (including this one) switch via the event:updated broadcast.
-  } catch { alert('שגיאה בעדכון מצב אירוע'); }
+  } catch (e) { showActionError('שגיאה בעדכון מצב אירוע', e); }
 }
 
 function applyEventMode({ active, name }) {
@@ -1100,7 +1100,7 @@ async function togglePaymentConfirmed(id, confirmed) {
   try {
     await api.patch(`/api/orders/${id}`, { paymentConfirmed: confirmed });
     // Row moves on all tablets via the WebSocket order:updated broadcast.
-  } catch { alert('שגיאה בעדכון אימות תשלום'); }
+  } catch (e) { showActionError('שגיאה בעדכון אימות תשלום', e); }
 }
 
 function renderVerify(scope) {
@@ -1365,8 +1365,8 @@ async function showDailySummary() {
       ${buildEventSummary(s.event)}`;
 
     document.getElementById('summary-modal').classList.remove('hidden');
-  } catch {
-    alert('שגיאה בטעינת סיכום');
+  } catch (e) {
+    showActionError('שגיאה בטעינת סיכום', e);
   }
 }
 
@@ -1381,11 +1381,48 @@ function downloadBackup() {
   URL.revokeObjectURL(url);
 }
 
-// ─── connection indicator ─────────────────────────────────────────────────────
+// ─── connection indicator + errors ────────────────────────────────────────────
 
 function setConnected(yes) {
   document.getElementById('connection-dot').className    = yes ? 'connected' : '';
   document.getElementById('connection-text').textContent = yes ? 'מחובר' : 'מנותק';
+}
+
+// Non-blocking message instead of an alert popup (api.js `connection`);
+// falls back to alert if an older cached api.js is loaded.
+function showActionError(label, err) {
+  if (typeof connection !== 'undefined') connection.actionFailed(label, err);
+  else { console.error(label, err); alert(label); }
+}
+
+async function loadTodayOrders() {
+  const orders = await api.get(`/api/orders?date=${TODAY}`);
+  state.orders = orders;
+  await localDB.putMany(orders);
+  renderAll();
+}
+
+// Connection is back: reload everything (broadcasts may have been missed).
+async function reloadFromServer() {
+  const knownIds = new Set(state.orders.map(o => o.id));
+  try {
+    const booth = await api.get('/api/booth');
+    if (!state.demoMode) { state.boothOpen = booth.open; renderBoothToggle(); }
+    applyEventMode(await api.get('/api/event'));
+    await loadTodayOrders();
+    // Form orders that arrived while offline still get their banner.
+    if (knownIds.size && typeof showFormOrderBanner === 'function') {
+      state.orders
+        .filter(o => o.source === 'whatsapp_form' && !knownIds.has(o.id))
+        .forEach(showFormOrderBanner);
+    }
+    if (state.tab === 'history') {
+      loadHistoryDates();
+      if (state.historyDate) loadHistoryDay(state.historyDate);
+    }
+  } catch (e) {
+    console.error('Reload after reconnect failed', e);
+  }
 }
 
 // ─── init ─────────────────────────────────────────────────────────────────────
@@ -1448,12 +1485,9 @@ async function init() {
 
   // Fetch authoritative data from server
   try {
-    const orders = await api.get(`/api/orders?date=${TODAY}`);
-    state.orders = orders;
-    await localDB.putMany(orders);
-    renderAll();
-  } catch {
-    console.warn('Server unavailable — showing local cache');
+    await loadTodayOrders();
+  } catch (e) {
+    console.warn('Server unavailable — showing local cache', e);
   }
 
   // WebSocket: live updates
@@ -1510,8 +1544,12 @@ async function init() {
   // Re-sync event mode after a reconnect in case a broadcast was missed.
   ws.on('_connected', () => api.get('/api/event').then(applyEventMode).catch(() => {}));
 
-  ws.on('_connected',    () => setConnected(true));
-  ws.on('_disconnected', () => setConnected(false));
+  if (typeof connection !== 'undefined') {
+    connection.start({ dotId: 'connection-dot', textId: 'connection-text', onRecover: reloadFromServer });
+  } else {
+    ws.on('_connected',    () => setConnected(true));
+    ws.on('_disconnected', () => setConnected(false));
+  }
   ws.connect();
 
   setInterval(tickTimers, 1000);

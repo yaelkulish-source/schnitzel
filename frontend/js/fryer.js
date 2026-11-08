@@ -160,8 +160,10 @@ async function markReady(id, btn) {
   try {
     await api.patch(`/api/orders/${id}`, { status: 'ready' });
     // Card disappears on the next WebSocket order:updated broadcast
-  } catch {
+  } catch (e) {
     if (btn) btn.disabled = false;
+    if (typeof connection !== 'undefined') connection.actionFailed(`הזמנה #${id} לא סומנה כמוכנה`, e);
+    else console.error(e);
   }
 }
 
@@ -379,6 +381,13 @@ function setConnected(yes) {
   document.getElementById('conn-text').textContent = yes ? 'מחובר' : 'מנותק';
 }
 
+async function loadOrders() {
+  const orders = await api.get(`/api/orders?date=${TODAY}`);
+  state.orders = orders;
+  await localDB.putMany(orders);
+  renderAll();
+}
+
 // ─── init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -400,12 +409,9 @@ async function init() {
 
   // Fetch authoritative state from server
   try {
-    const orders = await api.get(`/api/orders?date=${TODAY}`);
-    state.orders = orders;
-    await localDB.putMany(orders);
-    renderAll();
-  } catch {
-    console.warn('Server unavailable — showing local cache');
+    await loadOrders();
+  } catch (e) {
+    console.warn('Server unavailable — showing local cache', e);
   }
 
   // Live updates via WebSocket
@@ -431,8 +437,14 @@ async function init() {
     }
   });
 
-  ws.on('_connected',    () => setConnected(true));
-  ws.on('_disconnected', () => setConnected(false));
+  if (typeof connection !== 'undefined') {
+    // Clear "no connection" banner + auto-retry; reload once the server is back.
+    connection.start({ dotId: 'conn-dot', textId: 'conn-text', onRecover: () =>
+      loadOrders().catch(e => console.error('Reload after reconnect failed', e)) });
+  } else {
+    ws.on('_connected',    () => setConnected(true));
+    ws.on('_disconnected', () => setConnected(false));
+  }
   ws.connect();
 
   // 1s tick: clock + countdown timers
