@@ -3,6 +3,10 @@
 // hasSpreads    → per-unit picker with all spreads (main + ketchup/mayo).
 // hasCondiments → per-unit "רטבים" picker with ketchup/mayo only.
 
+// Fryer + spreads screens: a scheduled (form) order moves from the faded
+// "upcoming" section into the main list this many minutes before pickup.
+const PREP_LEAD_MINUTES = 15;
+
 const MENU = {
   food: [
     { id: 'chips',                   emoji: '🍟',      name: "צ'יפס",                   price: 10, hasSpreads: false, hasCondiments: true },

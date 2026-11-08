@@ -154,6 +154,27 @@
 
     .cards-empty { font-size: 1.6rem; color: #6b7280; text-align: center; padding: 24px; }
     .upcoming-fryer-card { border-style: dashed !important; }
+    /* scheduled order inside the prep window (PREP_LEAD_MINUTES) */
+    .fryer-card.card-prep { border: 4px solid #7c3aed; background: #f5f3ff; max-width: 320px; }
+    .prep-now {
+      margin: -14px -14px 4px;
+      padding: 8px 12px;
+      border-radius: 10px 10px 0 0;
+      background: #7c3aed;
+      color: #fff;
+      font-size: 1.2rem;
+      font-weight: 900;
+    }
+    #sound-btn {
+      padding: 6px 12px;
+      border: 2px solid #fbbf24;
+      border-radius: 20px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
 
     /* ─── urgent bar (bottom) ────────────────────────────────────────────── */
     #urgent-bar {
@@ -175,6 +196,7 @@
 <header id="fryer-header">
   <span class="fryer-title">דוכן שניצלים</span>
   <span id="current-time">--:--</span>
+  <button id="sound-btn" style="display:none">🔊 הקישו להפעלת צליל</button>
   <div id="conn-wrap">
     <span id="conn-dot"></span>
     <span id="conn-text">מתחבר…</span>
@@ -195,9 +217,9 @@
     <!-- filled by renderCards() -->
   </div>
 
-  <!-- Upcoming: scheduled form orders more than 10 min away -->
+  <!-- Upcoming: scheduled form orders more than PREP_LEAD_MINUTES away -->
   <section id="upcoming-section" style="display:none">
-    <div class="section-title" style="opacity:.6">📅 ממתינות — עוד 10+ דקות</div>
+    <div class="section-title" id="upcoming-title" style="opacity:.6">📅 הזמנות מראש</div>
     <div id="upcoming-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;opacity:.55"></div>
   </section>
 

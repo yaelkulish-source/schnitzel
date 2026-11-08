@@ -10,6 +10,10 @@ const state = { orders: [] };
 
 let wakeLock = null;
 
+// PREP_LEAD_MINUTES lives in menu.js. Fallback only for a tablet that still has an
+// older cached menu.js next to this file (GitHub Pages caches files ~10 min).
+const LEAD_MINUTES = typeof PREP_LEAD_MINUTES === 'number' ? PREP_LEAD_MINUTES : 15;
+
 // Set of drink names for fast filtering (drinks are not shown on fryer screen)
 const DRINK_NAMES = new Set(MENU.drinks.map(d => d.name));
 
@@ -18,7 +22,13 @@ const DRINK_NAMES = new Set(MENU.drinks.map(d => d.name));
 function isUpcoming(order) {
   if (order.source !== 'whatsapp_form') return false;
   const mins = minutesUntil(order.pickup_time);
-  return mins !== null && mins > 10;
+  return mins !== null && mins > LEAD_MINUTES;
+}
+
+// Scheduled form order that is now inside the prep window -> strong highlight.
+function isPrepNow(order) {
+  return order.source === 'whatsapp_form' && !!order.pickup_time && !isUpcoming(order) &&
+    (order.status === 'waiting' || order.status === 'cooking');
 }
 
 // Orders the fryer cares about NOW: waiting/cooking, not upcoming, with at least one food item
@@ -30,7 +40,7 @@ function activeOrders() {
   );
 }
 
-// Scheduled form orders more than 10 min away
+// Scheduled form orders more than PREP_LEAD_MINUTES away
 function upcomingOrders() {
   return state.orders
     .filter(o =>
@@ -96,6 +106,44 @@ function formatSpreads(spreads, quantity) {
     return lines.length ? `<div class="card-item-spreads">${lines.join('<br>')}</div>` : '';
   }
   return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
+}
+
+// ─── short alert sound (Web Audio) ────────────────────────────────────────────
+// Browsers allow sound only after one tap on the page — until then a
+// "הפעלת צליל" button is shown in the header.
+
+let audioCtx = null;
+
+function unlockAudio() {
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume().then(renderSoundBtn, () => {});
+  } catch (e) { console.warn('Audio:', e.message); }
+  renderSoundBtn();
+}
+
+function renderSoundBtn() {
+  const btn = document.getElementById('sound-btn');
+  if (btn) btn.style.display = audioCtx?.state === 'running' ? 'none' : '';
+}
+
+function playChime() {
+  unlockAudio();
+  if (!audioCtx) return;
+  const t0 = audioCtx.currentTime;
+  [988, 1319, 988, 1319].forEach((freq, i) => {
+    const t   = t0 + i * 0.18;
+    const osc = audioCtx.createOscillator();
+    const amp = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    amp.gain.setValueAtTime(0.0001, t);
+    amp.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+    amp.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    osc.connect(amp).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  });
 }
 
 // Sauces are shown only for items with the ketchup/mayo picker (chips, schnitzelons).
@@ -178,8 +226,11 @@ function buildCard(order) {
 
   const foodItems  = order.items.filter(item => !DRINK_NAMES.has(item.menu_item));
 
+  const prepNow    = isPrepNow(order);
+
   const cardClass  = ['fryer-card',
     isCooking ? 'card-cooking' : '',
+    prepNow   ? 'card-prep'    : '',
     isUrgent  ? 'card-urgent'  : '',
   ].filter(Boolean).join(' ');
 
@@ -204,6 +255,7 @@ function buildCard(order) {
 
   return `
     <div class="${cardClass}" id="fcard-${order.id}">
+      ${prepNow ? `<div class="prep-now">⏰ להכין עכשיו – איסוף ${esc(order.pickup_time)}</div>` : ''}
       <div class="card-top">
         <span class="card-num">#${order.id}</span>
         <span class="card-name">${esc(order.name)}</span>
@@ -286,9 +338,11 @@ function tickTimers() {
       needRerender = true;
     }
 
-    // Detect upcoming → active transition
+    // Detect upcoming → active transition (pickup − PREP_LEAD_MINUTES): chime once.
     const nowUpcoming = isUpcoming(o);
-    if (prevUpcoming.get(o.id) !== nowUpcoming) {
+    const wasUpcoming = prevUpcoming.get(o.id);
+    if (wasUpcoming !== nowUpcoming) {
+      if (wasUpcoming === true && !nowUpcoming && (o.status === 'waiting' || o.status === 'cooking')) playChime();
       prevUpcoming.set(o.id, nowUpcoming);
       needRerender = true;
     }
@@ -330,6 +384,13 @@ function setConnected(yes) {
 async function init() {
   // Show clock immediately
   tickTimers();
+
+  const upTitle = document.getElementById('upcoming-title');
+  if (upTitle) upTitle.textContent = `📅 הזמנות מראש — עוברות למעלה ${LEAD_MINUTES} דק׳ לפני האיסוף`;
+
+  document.addEventListener('pointerdown', unlockAudio, { passive: true });
+  document.getElementById('sound-btn')?.addEventListener('click', unlockAudio);
+  unlockAudio();
 
   // Render from local cache first (instant, no flash)
   try {

@@ -6,6 +6,9 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const CHALLAH_NAME = 'שניצל בחלה';
 const CONDIMENTS   = new Set(MENU.spreadsCondiments);
 const READY_KEY    = 'spreadsReady';
+// PREP_LEAD_MINUTES lives in menu.js. Fallback only for a tablet that still has an
+// older cached menu.js next to this file (GitHub Pages caches files ~10 min).
+const LEAD_MINUTES = typeof PREP_LEAD_MINUTES === 'number' ? PREP_LEAD_MINUTES : 15;
 
 // ─── state ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +77,12 @@ function minutesUntil(timeStr) {
 function isUpcoming(order) {
   if (order.source !== 'whatsapp_form') return false;
   const mins = minutesUntil(order.pickup_time);
-  return mins !== null && mins > 10;
+  return mins !== null && mins > LEAD_MINUTES;
+}
+
+// Scheduled form order inside the prep window -> strong highlight.
+function isPrepNow(order) {
+  return order.source === 'whatsapp_form' && !!order.pickup_time && !isUpcoming(order);
 }
 
 function minutesSince(iso) {
@@ -148,8 +156,11 @@ function buildCard(order, upcoming) {
       </div>
     </div>`).join('');
 
+  const prepNow = !upcoming && isPrepNow(order);
+
   return `
-    <div class="sp-card${upcoming ? ' upcoming' : ''}" id="sp-${order.id}">
+    <div class="sp-card${upcoming ? ' upcoming' : ''}${prepNow ? ' prep' : ''}" id="sp-${order.id}">
+      ${prepNow ? `<div class="sp-prep-now">⏰ להכין עכשיו – איסוף ${esc(order.pickup_time)}</div>` : ''}
       <div class="sp-top">
         <span class="sp-num">#${order.id}</span>
         <span class="sp-name">${esc(order.name)}</span>
@@ -210,6 +221,9 @@ function setConnected(yes) {
 
 async function init() {
   tick();
+
+  const upTitle = document.getElementById('upcoming-title');
+  if (upTitle) upTitle.textContent = `📅 הזמנות מראש — עוברות למעלה ${LEAD_MINUTES} דק׳ לפני האיסוף`;
 
   // Same loading path as the fryer: local cache first, then the server.
   try {
