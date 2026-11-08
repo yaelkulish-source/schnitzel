@@ -603,6 +603,7 @@ function renderAll() {
   }
   if (state.tab === 'completed') renderVerify('today');
   updateCompletedBadge();
+  refreshOrderDetails();
 }
 
 function renderStats() {
@@ -737,7 +738,7 @@ function buildCard(order, mode) {
     : '';
 
   return `
-    <div class="${cardClass}" id="card-${order.id}">
+    <div class="${cardClass}" id="card-${order.id}" data-oid="${order.id}" data-oscope="${mode === 'history' ? 'history' : 'today'}">
       <div class="card-header">
         <span class="order-num">#${order.id}</span>
         <span class="order-name">${esc(order.name)}</span>
@@ -780,7 +781,7 @@ function buildUpcomingCard(order) {
     `<div class="card-item">${item.quantity}× ${esc(item.menu_item)}</div>`
   ).join('');
   return `
-    <div class="order-card upcoming-card" id="card-${order.id}">
+    <div class="order-card upcoming-card" id="card-${order.id}" data-oid="${order.id}" data-oscope="today">
       <div class="card-header">
         <span class="order-num">#${order.id}</span>
         <span class="order-name">${esc(order.name)}</span>
@@ -957,6 +958,7 @@ function applyHistoryOrderUpdate(order) {
   const i = state.historyOrders.findIndex(o => o.id === order.id);
   if (i < 0) return;
   state.historyOrders[i] = order;
+  refreshOrderDetails();
   if (state.tab !== 'history') return;
   renderVerify('history');
   renderOrderGrid('history-orders', state.historyOrders, 'history');
@@ -1099,7 +1101,7 @@ function buildVerifyRow(order, scope) {
   ].filter(Boolean).join(' ');
 
   return `
-    <div class="${rowClass}"${scope === 'today' ? ` id="card-${order.id}"` : ''}>
+    <div class="${rowClass}"${scope === 'today' ? ` id="card-${order.id}"` : ''} data-oid="${order.id}" data-oscope="${scope}">
       <div class="vf-row-top">
         <span class="vf-num">#${order.id}</span>
         <span class="vf-name">${esc(order.name)}</span>
@@ -1118,6 +1120,112 @@ function buildVerifyRow(order, scope) {
         ${scope === 'today' ? `<button class="delete-order-btn vf-delete-btn" onclick="deleteOrder(${order.id},'${esc(order.name)}')">🗑 מחק</button>` : ''}
       </div>
     </div>`;
+}
+
+// ─── order details (read-only) ────────────────────────────────────────────────
+// Tapping a card (anywhere except its buttons) opens everything about the order.
+
+const DETAIL_STATUS = { waiting: 'ממתין', cooking: 'בהכנה', ready: 'מוכן', done: 'נאסף', cancelled: 'בוטל' };
+const details = { id: null, scope: 'today' };
+
+function findOrder(id, scope) {
+  const list = scope === 'history' ? state.historyOrders : state.orders;
+  return list.find(o => o.id === id);
+}
+
+function onOrderCardClick(e) {
+  // Buttons, inputs and the button rows (incl. gaps / disabled buttons) keep their own behaviour.
+  if (e.target.closest('button, a, input, select, textarea, summary, label, ' +
+      '.status-buttons, .payment-row, .vf-row-actions')) return;
+  const card = e.target.closest('[data-oid]');
+  if (!card) return;
+  openOrderDetails(Number(card.dataset.oid), card.dataset.oscope);
+}
+
+function openOrderDetails(id, scope = 'today') {
+  if (!findOrder(id, scope)) return;
+  details.id = id;
+  details.scope = scope;
+  renderOrderDetails();
+  document.getElementById('details-modal').classList.remove('hidden');
+}
+
+function closeOrderDetails() {
+  details.id = null;
+  document.getElementById('details-modal').classList.add('hidden');
+}
+
+// Keep an open details view in sync with live updates.
+function refreshOrderDetails() {
+  if (details.id === null) return;
+  if (findOrder(details.id, details.scope)) renderOrderDetails();
+  else closeOrderDetails();
+}
+
+function detailTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const time = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const day  = iso.slice(0, 10);
+  return day === TODAY ? time : `${time} · ${new Intl.DateTimeFormat('he-IL').format(d)}`;
+}
+
+// Per-unit spreads/sauces lines: #1, #2… (handles string[][], old string[] and []).
+function detailUnits(item) {
+  const spreads = item.spreads ?? [];
+  if (!spreads.length) return '';
+  if (!Array.isArray(spreads[0])) {
+    return `<div class="dt-units"><div class="dt-unit">${esc(spreads.join(' · '))}</div></div>`;
+  }
+  const rows = [];
+  for (let i = 0; i < item.quantity; i++) {
+    const unit = spreads[i] ?? [];
+    rows.push(`<div class="dt-unit"><span class="dt-unit-num">#${i + 1}</span>${unit.length ? esc(unit.join(' · ')) : '<span class="dt-none">—</span>'}</div>`);
+  }
+  return `<div class="dt-units">${rows.join('')}</div>`;
+}
+
+function renderOrderDetails() {
+  const order = findOrder(details.id, details.scope);
+  if (!order) return;
+
+  const isWa = order.source === 'whatsapp_form';
+  const row  = (label, value) => value ? `<div class="dt-row"><span class="dt-label">${label}</span><span class="dt-value">${value}</span></div>` : '';
+
+  let payment;
+  if (order.paid) payment = `${esc(PAY_LABEL[order.payment_method] || order.payment_method)} ✓ שולם`;
+  else payment = order.status === 'done' ? '<span class="dt-warn">אחר כך — לא שולם</span>' : 'עדיין לא שולם';
+  const verified = order.paymentConfirmed
+    ? `<span class="dt-ok">✓ אומת ${vfTime(order.paymentConfirmedAt)}</span>`
+    : 'לא אומת';
+
+  const itemsHtml = order.items.map(item => `
+    <div class="dt-item">
+      <div class="dt-item-top">
+        <span class="dt-qty">${item.quantity}×</span>
+        <span class="dt-item-name">${esc(item.menu_item)}</span>
+        <span class="dt-item-price">${item.quantity > 1 ? `${item.price}₪ × ${item.quantity} = ` : ''}${item.price * item.quantity}₪</span>
+      </div>
+      ${detailUnits(item)}
+    </div>`).join('');
+
+  document.getElementById('details-title').textContent = `הזמנה #${order.id} — ${order.name}`;
+  document.getElementById('details-content').innerHTML = `
+    <div class="dt-rows">
+      ${row('שם', esc(order.name))}
+      ${row('טלפון', order.phone ? `<a href="tel:${esc(order.phone)}" dir="ltr">${esc(order.phone)}</a>` : '')}
+      ${row('מקור', isWa ? '📱 טופס' : '🏪 דוכן')}
+      ${row('אירוע', order.event ? `🎪 ${esc(order.event)}` : '')}
+      ${row('נוצרה', detailTime(order.created_at))}
+      ${row('איסוף', order.pickup_time ? `<strong class="dt-pickup">🕐 ${esc(order.pickup_time)}</strong>` : 'בהקדם')}
+      ${row('סטטוס', DETAIL_STATUS[order.status] || esc(order.status))}
+      ${row('תשלום', payment)}
+      ${row('אימות תשלום', verified)}
+    </div>
+    ${order.note ? `<div class="dt-note">💬 ${esc(order.note)}</div>` : ''}
+    <div class="dt-items-title">פריטים</div>
+    <div class="dt-items">${itemsHtml}</div>
+    <div class="dt-total"><span>סה"כ</span><strong>${order.total}₪</strong></div>`;
 }
 
 // ─── daily summary modal ──────────────────────────────────────────────────────
@@ -1221,6 +1329,14 @@ async function init() {
   });
   document.getElementById('edit-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeEditModal();
+  });
+
+  document.getElementById('orders-panel').addEventListener('click', onOrderCardClick);
+  document.getElementById('details-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeOrderDetails();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && details.id !== null) closeOrderDetails();
   });
 
   document.querySelectorAll('.tab-btn').forEach(btn =>

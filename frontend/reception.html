@@ -130,6 +130,18 @@
   </div>
 </div>
 
+<!-- ─── Order Details Modal (read-only) ─────────────────────────────────────── -->
+<div id="details-modal" class="modal-backdrop hidden">
+  <div class="modal details-modal">
+    <div class="modal-header">
+      <h2 id="details-title">פרטי הזמנה</h2>
+      <button class="modal-close" onclick="closeOrderDetails()">✕</button>
+    </div>
+    <div id="details-content"></div>
+    <button class="btn btn-secondary details-close-btn" onclick="closeOrderDetails()">סגור</button>
+  </div>
+</div>
+
 <!-- ─── Daily Summary Modal ─────────────────────────────────────────────────── -->
 <div id="summary-modal" class="modal-backdrop hidden">
   <div class="modal">
