@@ -818,11 +818,10 @@ function buildUpcomingCard(order) {
 
 // ─── new form order banner + sound ────────────────────────────────────────────
 // Every new form order (incl. scheduled pre-orders) shows a banner at the top
-// of the screen until it is tapped, with a short chime (repeated every 30s
-// while a banner is still open).
+// of the screen until it is tapped, with a short chime played once when the
+// banner appears.
 
 const formBanners = new Set(); // order ids with an open banner
-let bannerChimeTimer = null;
 
 let audioCtx = null;
 
@@ -869,16 +868,11 @@ function showFormOrderBanner(order) {
   container.appendChild(el);
 
   playChime();
-  if (!bannerChimeTimer) bannerChimeTimer = setInterval(playChime, 30000);
 }
 
 function dismissFormBanner(id) {
   formBanners.delete(id);
   document.getElementById(`fbanner-${id}`)?.remove();
-  if (!formBanners.size && bannerChimeTimer) {
-    clearInterval(bannerChimeTimer);
-    bannerChimeTimer = null;
-  }
 }
 
 // ─── scheduled alerts ─────────────────────────────────────────────────────────
