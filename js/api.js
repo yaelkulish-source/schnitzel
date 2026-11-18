@@ -61,6 +61,17 @@ const api = {
     return data;
   },
 
+  async put(path, body) {
+    const res = await fetchWithTimeout(path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `PUT ${path} → ${res.status}`), { status: res.status });
+    return data;
+  },
+
   async delete(path) {
     const res = await fetchWithTimeout(path, { method: 'DELETE' });
     if (!res.ok) throw Object.assign(new Error(`DELETE ${path} → ${res.status}`), { status: res.status });
