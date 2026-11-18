@@ -19,6 +19,7 @@ async function connect() {
 
   await orders.createIndex({ id: 1 }, { unique: true });
   await orders.createIndex({ date: 1 });
+  await connectShopping();
 }
 
 // ─── counter (sequential numeric order IDs) ───────────────────────────────────
@@ -173,4 +174,69 @@ async function deleteCompletedOrders(date) {
   await orders.deleteMany({ date, status: 'done' });
 }
 
-module.exports = { connect, getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, getEventMode, setEventMode, deleteOrder, deleteCompletedOrders };
+
+// ─── shopping list (shopping.html) ────────────────────────────────────────────
+// One collection, three docs: 'recipe' (menu + departments + items),
+// 'plan' (portions + per-item cart/home marks) and 'checklist' (pre-sale list).
+
+let shopping;
+
+async function connectShopping() {
+  shopping = client.db(dbName).collection('shopping');
+  // Seed on first run only — never overwrite data that is already there.
+  const seed = require('./shopping-seed');
+  const now = new Date().toISOString();
+  const defaults = {
+    recipe:    { menu: seed.menu, departments: seed.departments, items: seed.recipe },
+    plan:      { portions: Object.fromEntries(seed.menu.map(m => [m.k, 0])), marks: {} },
+    checklist: { items: seed.checklist.map(c => ({ ...c, done: false })) },
+  };
+  for (const [_id, doc] of Object.entries(defaults)) {
+    const r = await shopping.updateOne({ _id }, { $setOnInsert: { ...doc, updated_at: now } }, { upsert: true });
+    if (r.upsertedCount) console.log(`Seeded shopping/${_id}`);
+  }
+}
+
+async function getShopping() {
+  const docs = await shopping.find({}).toArray();
+  const by = Object.fromEntries(docs.map(d => [d._id, d]));
+  return { recipe: by.recipe, plan: by.plan, checklist: by.checklist };
+}
+
+async function getShoppingDoc(_id) {
+  return shopping.findOne({ _id });
+}
+
+async function updateShoppingDoc(_id, update, options = {}) {
+  update.$set = { ...(update.$set || {}), updated_at: new Date().toISOString() };
+  return shopping.findOneAndUpdate({ _id }, update, { ...options, returnDocument: 'after' });
+}
+
+// Average portions per menu item over the last `days` real sale days.
+// Excludes demo, cancelled, deleted and event-tagged orders.
+async function getAveragePortions(menuNames, days = 3) {
+  const rows = await orders.aggregate([
+    { $match: {
+      status:  { $ne: 'cancelled' },
+      demo:    { $ne: true },
+      deleted: { $ne: true },
+      event:   null,               // matches missing or null
+    } },
+    { $unwind: '$items' },
+    { $match: { 'items.menu_item': { $in: menuNames } } },
+    { $group: { _id: { date: '$date', name: '$items.menu_item' }, qty: { $sum: '$items.quantity' } } },
+  ]).toArray();
+
+  const perDate = {};
+  for (const r of rows) (perDate[r._id.date] ??= {})[r._id.name] = r.qty;
+  const dates = Object.keys(perDate).sort().reverse().slice(0, days);
+  const average = {};
+  for (const name of menuNames) {
+    const sum = dates.reduce((s, d) => s + (perDate[d][name] || 0), 0);
+    average[name] = dates.length ? Math.round(sum / dates.length) : 0;
+  }
+  return { dates, average, perDate: Object.fromEntries(dates.map(d => [d, perDate[d]])) };
+}
+
+module.exports = { connect, getOrdersByDate, getOrderById, createOrder, updateOrder, getSummaryByDate, getDistinctDates, getBooth, setBooth, getEventMode, setEventMode, deleteOrder, deleteCompletedOrders,
+  getShopping, getShoppingDoc, updateShoppingDoc, getAveragePortions };

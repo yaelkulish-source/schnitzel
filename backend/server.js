@@ -4,6 +4,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const cors = require('cors');
 const ordersRouter = require('./routes/orders');
+const shoppingRouter = require('./routes/shopping');
 const db = require('./db');
 const demoStore = require('./demo');
 const asyncHandler = require('./asyncHandler');
@@ -33,6 +34,7 @@ app.use((req, _res, next) => {
 // ─── routes ───────────────────────────────────────────────────────────────────
 
 app.use('/api/orders', ordersRouter);
+app.use('/api/shopping', shoppingRouter);
 
 app.get('/api/booth', asyncHandler(async (_req, res) => {
   const booth = await db.getBooth();
