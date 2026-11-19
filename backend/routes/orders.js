@@ -4,6 +4,26 @@ const db = require('../db');
 const demoStore = require('../demo');
 const asyncHandler = require('../asyncHandler');
 
+// Must match PREP_LEAD_MINUTES in frontend/js/menu.js.
+const PREP_LEAD_MINUTES = 15;
+const PICKUP_TOO_SOON_MSG = 'שעת האיסוף קרובה מדי, בחרו שעה אחרת';
+
+// Current minute of the day in Israel — pickup_time is local "HH:MM" and the
+// server (Render) runs on UTC.
+function israelMinutesNow() {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const get = t => Number(parts.find(p => p.type === t).value);
+  return get('hour') * 60 + get('minute');
+}
+
+function pickupTooSoon(pickup_time) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(pickup_time || '');
+  if (!m) return false;
+  return Number(m[1]) * 60 + Number(m[2]) < israelMinutesNow() + PREP_LEAD_MINUTES;
+}
+
 // GET /api/orders?date=YYYY-MM-DD  (defaults to today)
 router.get('/', asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
@@ -35,6 +55,11 @@ router.post('/', asyncHandler(async (req, res) => {
   }
   if (total == null || typeof total !== 'number' || total < 0) {
     return res.status(400).json({ error: 'סכום לא תקין' });
+  }
+
+  // Form orders need at least PREP_LEAD_MINUTES of prep time (reception orders are exempt).
+  if (source === 'whatsapp_form' && pickupTooSoon(pickup_time)) {
+    return res.status(400).json({ error: PICKUP_TOO_SOON_MSG });
   }
 
   // Tag with the active event (server-side state, so all tablets agree).
