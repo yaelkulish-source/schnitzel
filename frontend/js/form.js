@@ -91,7 +91,8 @@ function buildItemsArray() {
     const def = MENU.byId[id];
     if (!def) continue;
     const spreads = hasPerUnitChoices(def)
-      ? (cartSpreads.get(id) ?? []).map(s => [...s])
+      // Canonical menu order (sortSpreads in menu.js), not click order.
+      ? (cartSpreads.get(id) ?? []).map(s => (typeof sortSpreads === 'function' ? sortSpreads([...s]) : [...s]))
       : [];
     items.push({ menu_item: def.name, price: def.price, quantity: qty, spreads });
   }

@@ -71,18 +71,24 @@ function isPayActive(order, method) {
   return method === 'pending' ? !order.paid : (order.paid && order.payment_method === method);
 }
 
+// Spread helpers live in menu.js; fallbacks keep the old display for a tablet
+// that still has an older cached menu.js.
+const sortSpreadList  = typeof sortSpreads === 'function' ? sortSpreads : (l => [...(l ?? [])]);
+const groupUnitList   = typeof groupSpreadUnits === 'function' ? groupSpreadUnits
+  : ((units, count = units.length) => Array.from({ length: Math.max(count, units.length) }, (_, i) => ({ nums: [i + 1], spreads: units[i] ?? [] })));
+const unitLabelText   = typeof unitGroupLabel === 'function' ? unitGroupLabel : (nums => `#${nums[0]}`);
+
 function formatSpreads(spreads, quantity) {
   if (!spreads?.length) return '';
   if (Array.isArray(spreads[0])) {
-    // New format: string[][] — one array per unit
-    const lines = spreads.map((unit, i) => {
-      const prefix = quantity > 1 ? `#${i + 1}: ` : '';
-      return unit.length ? prefix + esc(unit.join(' · ')) : '';
-    }).filter(Boolean);
+    // New format: string[][] — one array per unit; identical units grouped, canonical order
+    const lines = groupUnitList(spreads, quantity)
+      .filter(g => g.spreads.length)
+      .map(g => (quantity > 1 ? `<bdi dir="ltr">${esc(unitLabelText(g.nums))}</bdi>: ` : '') + esc(g.spreads.join(' · ')));
     return lines.length ? `<div class="card-item-spreads">${lines.join('<br>')}</div>` : '';
   }
   // Old format: string[] (backward compat)
-  return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
+  return `<div class="card-item-spreads">${esc(sortSpreadList(spreads).join(' · '))}</div>`;
 }
 
 // Reception uses the event menu while event mode is on; otherwise the regular menu.
@@ -1252,13 +1258,11 @@ function detailUnits(item) {
   const spreads = item.spreads ?? [];
   if (!spreads.length) return '';
   if (!Array.isArray(spreads[0])) {
-    return `<div class="dt-units"><div class="dt-unit">${esc(spreads.join(' · '))}</div></div>`;
+    return `<div class="dt-units"><div class="dt-unit">${esc(sortSpreadList(spreads).join(' · '))}</div></div>`;
   }
-  const rows = [];
-  for (let i = 0; i < item.quantity; i++) {
-    const unit = spreads[i] ?? [];
-    rows.push(`<div class="dt-unit"><span class="dt-unit-num">#${i + 1}</span>${unit.length ? esc(unit.join(' · ')) : '<span class="dt-none">—</span>'}</div>`);
-  }
+  // Identical units grouped ("#1–#3 (×3)"), choices in canonical menu order.
+  const rows = groupUnitList(spreads.slice(0, item.quantity), item.quantity).map(g =>
+    `<div class="dt-unit"><bdi class="dt-unit-num" dir="ltr">${esc(unitLabelText(g.nums))}</bdi> ${g.spreads.length ? esc(g.spreads.join(' · ')) : '<span class="dt-none">—</span>'}</div>`);
   return `<div class="dt-units">${rows.join('')}</div>`;
 }
 
