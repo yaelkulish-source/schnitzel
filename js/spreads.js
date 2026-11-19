@@ -10,6 +10,13 @@ const READY_KEY    = 'spreadsReady';
 // older cached menu.js next to this file (GitHub Pages caches files ~10 min).
 const LEAD_MINUTES = typeof PREP_LEAD_MINUTES === 'number' ? PREP_LEAD_MINUTES : 15;
 
+// Spread helpers live in menu.js; fallbacks keep the old display for a tablet
+// that still has an older cached menu.js.
+const sortSpreadList = typeof sortSpreads === 'function' ? sortSpreads : (l => [...(l ?? [])]);
+const groupUnitList  = typeof groupSpreadUnits === 'function' ? groupSpreadUnits
+  : (units => units.map((spreads, i) => ({ nums: [i + 1], spreads })));
+const unitNumsText   = typeof formatUnitNums === 'function' ? formatUnitNums : (nums => `#${nums[0]}`);
+
 // ─── state ────────────────────────────────────────────────────────────────────
 
 const state = { orders: [] };
@@ -103,8 +110,9 @@ function challahUnits(order) {
     const spreads = item.spreads ?? [];
     const perUnit = Array.isArray(spreads[0]);
     for (let i = 0; i < item.quantity; i++) {
-      const chosen = perUnit ? (spreads[i] ?? []) : (i === 0 ? spreads : []);
+      const chosen = sortSpreadList(perUnit ? (spreads[i] ?? []) : (i === 0 ? spreads : []));
       units.push({
+        all:  chosen,
         main: chosen.filter(s => !CONDIMENTS.has(s)),
         cond: chosen.filter(s =>  CONDIMENTS.has(s)),
       });
@@ -145,9 +153,16 @@ function buildCard(order, upcoming) {
   const units = challahUnits(order);
   const age   = minutesSince(order.created_at);
 
-  const unitsHtml = units.map((u, i) => `
+  // Identical חלות grouped: "#1–#3" + "×3"; different ones stay on their own line.
+  const groups = groupUnitList(units.map(u => u.all)).map(g => ({
+    nums: g.nums,
+    main: g.spreads.filter(s => !CONDIMENTS.has(s)),
+    cond: g.spreads.filter(s =>  CONDIMENTS.has(s)),
+  }));
+
+  const unitsHtml = groups.map(u => `
     <div class="sp-unit">
-      <span class="sp-unit-num">#${i + 1}</span>
+      <span class="sp-unit-num">${esc(unitNumsText(u.nums))}${u.nums.length > 1 ? `<span class="sp-unit-x">×${u.nums.length}</span>` : ''}</span>
       <div class="sp-unit-body">
         ${u.main.length
           ? `<div class="sp-spreads">${esc(u.main.join(' · '))}</div>`

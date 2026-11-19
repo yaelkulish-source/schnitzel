@@ -91,7 +91,8 @@ function buildItemsArray() {
     const def = MENU.byId[id];
     if (!def) continue;
     const spreads = hasPerUnitChoices(def)
-      ? (cartSpreads.get(id) ?? []).map(s => [...s])
+      // Canonical menu order (sortSpreads in menu.js), not click order.
+      ? (cartSpreads.get(id) ?? []).map(s => (typeof sortSpreads === 'function' ? sortSpreads([...s]) : [...s]))
       : [];
     items.push({ menu_item: def.name, price: def.price, quantity: qty, spreads });
   }
@@ -128,26 +129,96 @@ function generateTimeSlots(startStr, endStr, intervalMin) {
   return slots;
 }
 
+// Minimum prep time — PREP_LEAD_MINUTES lives in menu.js (fallback only for a
+// phone that still has an older cached menu.js).
+const PICKUP_LEAD_MIN = typeof PREP_LEAD_MINUTES === 'number' ? PREP_LEAD_MINUTES : 15;
+const PICKUP_TOO_SOON_MSG = 'שעת האיסוף קרובה מדי, בחרו שעה אחרת';
+
+function toMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// A slot the server rejected (e.g. this phone's clock is behind): it and
+// anything earlier are no longer offered.
+let rejectedPickupMinutes = -1;
+
+// Earliest allowed pickup, in minutes since midnight (now + lead, current minute).
+function earliestPickupMinutes() {
+  const now = new Date();
+  return Math.max(now.getHours() * 60 + now.getMinutes() + PICKUP_LEAD_MIN, rejectedPickupMinutes + 1);
+}
+
+function earliestPickupHHMM() {
+  const t = Math.min(earliestPickupMinutes(), 23 * 60 + 59);
+  return `${String(Math.floor(t / 60)).padStart(2,'0')}:${String(t % 60).padStart(2,'0')}`;
+}
+
+let pickupSlotsKey = null; // slot list currently shown — re-render only when it changes
+
 function renderPickupTimeField() {
   const container = document.getElementById('pickup-time-field');
   if (!container) return;
 
+  const prev = document.getElementById('f-pickup')?.value || '';
+  const hint = `<p class="field-hint">זמן הכנה מינימלי: ${PICKUP_LEAD_MIN} דקות</p>
+      <p class="error-msg" id="err-pickup"></p>`;
+
   if (boothHours.open_time && boothHours.close_time) {
-    const slots = generateTimeSlots(boothHours.open_time, boothHours.close_time, 15);
+    const earliest = earliestPickupMinutes();
+    const slots = generateTimeSlots(boothHours.open_time, boothHours.close_time, 15)
+      .filter(t => toMinutes(t) >= earliest);
+    const key = `${boothHours.open_time}-${boothHours.close_time}|${slots.join(',')}`;
+    if (key === pickupSlotsKey && document.getElementById('f-pickup')) return;
+    pickupSlotsKey = key;
+    const keep = slots.includes(prev) ? prev : '';
     container.innerHTML = `
       <label class="field-label" for="f-pickup">שעת איסוף <span class="required-star">*</span></label>
       <select id="f-pickup">
-        <option value="">— בחר שעת איסוף —</option>
-        ${slots.map(t => `<option value="${t}">${t}</option>`).join('')}
-      </select>`;
+        <option value="">${slots.length ? '— בחר שעת איסוף —' : '— אין יותר שעות איסוף פנויות —'}</option>
+        ${slots.map(t => `<option value="${t}"${t === keep ? ' selected' : ''}>${t}</option>`).join('')}
+      </select>
+      ${hint}`;
   } else {
+    // Free time input: keep what was typed, only move the minimum forward.
+    const input = document.getElementById('f-pickup');
+    if (input && input.type === 'time') {
+      input.min = earliestPickupHHMM();
+      return;
+    }
+    pickupSlotsKey = null;
     container.innerHTML = `
       <label class="field-label" for="f-pickup">שעת איסוף</label>
-      <input type="time" id="f-pickup">`;
+      <input type="time" id="f-pickup" min="${earliestPickupHHMM()}">
+      ${hint}`;
   }
-  document.getElementById('f-pickup')?.addEventListener('change', refreshSubmit);
-  document.getElementById('f-pickup')?.addEventListener('input',  refreshSubmit);
+  const pickup = document.getElementById('f-pickup');
+  const onChange = () => { clearFieldError('f-pickup', 'err-pickup'); refreshSubmit(); };
+  pickup.addEventListener('change', onChange);
+  pickup.addEventListener('input',  onChange);
+  refreshSubmit();
 }
+
+// Typed time (no booth hours) that is earlier than now + lead.
+function pickupInputTooSoon(value) {
+  return !!value && toMinutes(value) < earliestPickupMinutes();
+}
+
+function showPickupTooSoon(rejected) {
+  if (rejected) rejectedPickupMinutes = Math.max(rejectedPickupMinutes, toMinutes(rejected));
+  pickupSlotsKey = null; // force a fresh list
+  const input = document.getElementById('f-pickup');
+  if (input) input.value = '';
+  renderPickupTimeField();
+  showFieldError('f-pickup', 'err-pickup', PICKUP_TOO_SOON_MSG);
+  document.getElementById('f-pickup')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// While the form stays open, drop slots that became too close.
+setInterval(() => {
+  const formEl = document.getElementById('order-form');
+  if (formInitialized && formEl && !formEl.classList.contains('hidden') && !isSubmitting) renderPickupTimeField();
+}, 15000);
 
 // ─── menu grid ────────────────────────────────────────────────────────────────
 
@@ -353,6 +424,7 @@ async function handleSubmit(e) {
     document.getElementById(firstErrorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
+  if (pickupInputTooSoon(pickup_time)) return showPickupTooSoon();
 
   const btn = document.getElementById('submit-btn');
   isSubmitting    = true;
@@ -370,10 +442,14 @@ async function handleSubmit(e) {
     });
     showConfirmation(order);
   } catch (err) {
-    alert('שגיאה בשליחת ההזמנה:\n' + err.message);
     isSubmitting    = false;
     btn.disabled    = false;
     btn.textContent = 'שליחת הזמנה';
+    if (err.status === 400 && err.message === PICKUP_TOO_SOON_MSG) {
+      showPickupTooSoon(pickup_time);
+      return;
+    }
+    alert('שגיאה בשליחת ההזמנה:\n' + err.message);
   }
 }
 

@@ -96,16 +96,23 @@ function esc(s) {
 }
 
 // Same formatting as reception's formatSpreads (per-unit string[][] or old string[]).
+// Spread helpers live in menu.js; fallbacks keep the old display for a tablet
+// that still has an older cached menu.js.
+const sortSpreadList  = typeof sortSpreads === 'function' ? sortSpreads : (l => [...(l ?? [])]);
+const groupUnitList   = typeof groupSpreadUnits === 'function' ? groupSpreadUnits
+  : ((units, count = units.length) => Array.from({ length: Math.max(count, units.length) }, (_, i) => ({ nums: [i + 1], spreads: units[i] ?? [] })));
+const unitLabelText   = typeof unitGroupLabel === 'function' ? unitGroupLabel : (nums => `#${nums[0]}`);
+
 function formatSpreads(spreads, quantity) {
   if (!spreads?.length) return '';
   if (Array.isArray(spreads[0])) {
-    const lines = spreads.map((unit, i) => {
-      const prefix = quantity > 1 ? `#${i + 1}: ` : '';
-      return unit.length ? prefix + esc(unit.join(' · ')) : '';
-    }).filter(Boolean);
+    // Identical units grouped ("#1–#3 (×3): …"), choices in canonical menu order.
+    const lines = groupUnitList(spreads, quantity)
+      .filter(g => g.spreads.length)
+      .map(g => (quantity > 1 ? `<bdi dir="ltr">${esc(unitLabelText(g.nums))}</bdi>: ` : '') + esc(g.spreads.join(' · ')));
     return lines.length ? `<div class="card-item-spreads">${lines.join('<br>')}</div>` : '';
   }
-  return `<div class="card-item-spreads">${esc(spreads.join(' · '))}</div>`;
+  return `<div class="card-item-spreads">${esc(sortSpreadList(spreads).join(' · '))}</div>`;
 }
 
 // ─── short alert sound (Web Audio) ────────────────────────────────────────────

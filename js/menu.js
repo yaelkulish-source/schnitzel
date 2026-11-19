@@ -46,3 +46,49 @@ const EVENT_MENU = {
 
 EVENT_MENU.allItems = [...EVENT_MENU.food, ...EVENT_MENU.drinks];
 EVENT_MENU.byId = Object.fromEntries(EVENT_MENU.allItems.map(item => [item.id, item]));
+
+// ─── spread display helpers (reception, fryer, spreads, form) ─────────────────
+// Canonical order: MENU.spreadsMain, then MENU.spreadsCondiments. Applied at
+// display time, so older orders saved in click order show the same way too.
+
+const SPREAD_ORDER = [...MENU.spreadsMain, ...MENU.spreadsCondiments];
+
+function sortSpreads(list) {
+  const rank = s => { const i = SPREAD_ORDER.indexOf(s); return i === -1 ? SPREAD_ORDER.length : i; };
+  return [...(list ?? [])].map((s, i) => [s, i])
+    .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])   // unknown names keep their order, at the end
+    .map(([s]) => s);
+}
+
+// Per-unit choices (string[][], one array per unit) → identical units grouped:
+// [{ nums: [1, 2, 3], spreads: [...] }, …], in order of each group's first unit.
+// `count` pads missing units with [] (a unit with nothing chosen).
+function groupSpreadUnits(units, count = units.length) {
+  const groups = [];
+  const byKey = new Map();
+  for (let i = 0; i < Math.max(count, units.length); i++) {
+    const spreads = sortSpreads(units[i] ?? []);
+    const key = spreads.join('\u0001');
+    let g = byKey.get(key);
+    if (!g) { g = { nums: [], spreads }; byKey.set(key, g); groups.push(g); }
+    g.nums.push(i + 1);
+  }
+  return groups;
+}
+
+// [1,2,3] → "#1–#3", [1,3] → "#1, #3", [1,2,4] → "#1–#2, #4"
+function formatUnitNums(nums) {
+  const parts = [];
+  for (let i = 0; i < nums.length; i++) {
+    let j = i;
+    while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    parts.push(j > i ? `#${nums[i]}–#${nums[j]}` : `#${nums[i]}`);
+    i = j;
+  }
+  return parts.join(', ');
+}
+
+// Label for a group: "#2" or "#1–#3 (×3)".
+function unitGroupLabel(nums) {
+  return nums.length > 1 ? `${formatUnitNums(nums)} (×${nums.length})` : formatUnitNums(nums);
+}
